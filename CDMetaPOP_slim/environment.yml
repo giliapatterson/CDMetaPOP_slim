@@ -1,0 +1,15 @@
+name: cdmetapop_slim
+channels:
+    - conda-forge
+    - bioconda
+dependencies:
+    - python
+    - slim
+    - polars
+    - numpy
+    - scipy
+    - snakemake
+    - jupyterlab
+    - R
+    - r-tidyverse
+    - r-argparse
