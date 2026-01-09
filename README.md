@@ -1,5 +1,5 @@
-# CDMetaPOP_slim
-CDMetaPOP 2 reprogrammed in SLiM
+# CDMetaPOP Version 2S
+Single species CDMetaPOP 2 with some of the source code switched to SLiM for increased efficiency when implementing genetic models. Multi-species models are in progress. Models implemented and input file formats are identical to CDMetaPOP 2.
 
 ## How to install
 
