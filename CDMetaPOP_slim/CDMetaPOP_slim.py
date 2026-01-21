@@ -114,8 +114,8 @@ def run_slim(run_df, sim_info_q):
     failed = 0
     for row in run_df.iter_rows(named = True):
         rep_start = time.perf_counter()
-        rep_output_folder = f"{outdir}run{row['run']-1}mc{row['rep']}/"
-        simulation_finished = f"{outdir}run{row['run']-1}mc{row['rep']}/finished_{row['seed']}.txt"
+        rep_output_folder = f"{outdir}run{row['run']-1}batch0mc{row['rep']}species0/"
+        simulation_finished = f"{outdir}run{row['run']-1}batch0mc{row['rep']}species0/finished_{row['seed']}.txt"
         if os.path.exists(simulation_finished):
             already_run += 1
             print(f"Run {row['run']} rep {row['rep']} with seed {row['seed']} already finished, skipping. Results: {rep_output_folder}")
