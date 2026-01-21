@@ -57,5 +57,51 @@ mamba activate cdmetapop_slim
     python CDMetaPOP_slim.py -d ../example_runs/small_WCT_parameters/ -i RunVars_WCT.csv -o cdmetapop_slim_results_small --no-filetime -s 20329 --cores 20
     ```
     
-    CDMetaPOP will use as many cores as possible up to the number specified by `--cores`.
+    CDMetaPOP_slim will use as many cores as possible up to the number specified by `--cores`.
+
+## Example runs
+
+### Coastal cutthroat trout in the McKenzie
+
+```
+example_runs/McKenzie_CCT
+```
+
+Random initialization of 100 loci.
+
+```
+python CDMetaPOP_slim.py -d ../example_runs/McKenzie_CCT/ -i RunVars.csv -o cdmetapop_slim_results --no-filetime -s 233
+```
+
+Runtime: ~24 seconds in CDMetaPOP Version 3S, ~12 minutes in CDMetaPOP Version 3
+
+### Westslope cutthroat trout - small version
+
+```
+example_runs/small_WCT_parameters
+```
+
+5 patches, genes initialized from file, climate changes over time, 5 runs of each set of parameters.
+
+```
+python CDMetaPOP_slim.py -d ../example_runs/small_WCT_parameters/ -i RunVars_WCT.csv -o cdmetapop_slim_results_small --no-filetime -s 20329 --cores 1
+```
+
+Runtime: With no parallelization, ~10 minutes in CDMetaPOP Version 3S, ~124 minutes in CDMetaPOP Version 3.
+
+### Westslope cutthroat trout - big version
+
+```
+example_runs/WCT_parameters
+```
+
+415 patches, genes initialized from file, climate changes over time, 5 runs of each set of parameters.
+
+```
+python CDMetaPOP_slim.py -d ../example_runs/WCT_parameters/ -i RunVars_WCT.csv -o cdmetapop_slim_results --no-filetime -s 20329 --cores 8
+```
+
+Runtime: Parallelized over 8 cores: ~216 minutes in CDMetaPOP Version 3S
+
+
 
