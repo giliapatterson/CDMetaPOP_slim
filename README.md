@@ -51,6 +51,12 @@ mamba activate cdmetapop_slim
 
     This option is very helpful for running on the cluster, because CDMetaPOP won't rerun replicates with the same seed. If some of the replicates don't finish due to time limits or out of memory errors, you can simply rerun the command with the same seed and CDMetaPOP will only rerun replicates that didn't finish the first time.
 
+- To force rerunning simulations:
+
+    ```
+    python CDMetaPOP_slim.py -d ../example_runs/small_WCT_parameters/ -i RunVars_WCT.csv -o cdmetapop_slim_results_small --no-filetime -s 20329 --rerun
+    ```
+
 - To paralellize across replicates:
 
     ```

@@ -18,6 +18,9 @@ parser.add_argument("-s", "--seed", help = "Random seed")
 parser.add_argument('--filetime', action='store_true')
 parser.add_argument('--no-filetime', dest='filetime', action='store_false')
 parser.set_defaults(filetime=True)
+parser.add_argument('--rerun', action='store_true')
+parser.add_argument('--no-rerun', dest='rerun', action='store_false')
+parser.set_defaults(rerun=False)
 parser.add_argument('-c','--cores', type = int, default = 1)
 args = parser.parse_args()
 
@@ -58,10 +61,11 @@ print(f"Processing {fileans} to SLiM format and writing to the directory {slim_p
 time1 = time.perf_counter()
 
 # First check if the parameters have already been processed
-if os.path.exists(slim_params):
+if os.path.exists(slim_params) and not args.rerun:
     print(f"{slim_params} folder already exists, skipping processing step.")   
 else:
-    os.mkdir(slim_params)
+    if not os.path.exists(slim_params):
+        os.mkdir(slim_params)
     command = f"Rscript '{script_dir}/scripts/make_slim_params.R' --parameter_directory {datadir} \
             --runvars_file_name {fileans} \
             --output_directory {slim_params}"
@@ -116,7 +120,7 @@ def run_slim(run_df, sim_info_q):
         rep_start = time.perf_counter()
         rep_output_folder = f"{outdir}run{row['run']-1}batch0mc{row['rep']}species0/"
         simulation_finished = f"{outdir}run{row['run']-1}batch0mc{row['rep']}species0/finished_{row['seed']}.txt"
-        if os.path.exists(simulation_finished):
+        if os.path.exists(simulation_finished) and not args.rerun:
             already_run += 1
             print(f"Run {row['run']} rep {row['rep']} with seed {row['seed']} already finished, skipping. Results: {rep_output_folder}")
         else:
