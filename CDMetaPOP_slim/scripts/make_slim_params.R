@@ -66,6 +66,10 @@ for(run in 1:nruns){
   }
   runvars <- mutate(runvars, output_years = add_one(as.character(output_years)),
                     cdclimgentime = add_one(as.character(cdclimgentime)))
+  if(runvars$gridformat != 'genalex'){
+    print(glue("gridformat {runvars$gridformat} is not supported. Using 'genalex' grid format."))
+  }
+
   if(climate_change){runvars_used <- c("Popvars", "runtime", "output_years", "cdclimgentime")}
   if(!climate_change){runvars_used <- c("Popvars", "runtime", "output_years")}
   runvars <- select(runvars, all_of(runvars_used))
@@ -101,7 +105,7 @@ for(run in 1:nruns){
     genes_method = "random"
   }
   if (length(unique(genes_initialize)) == 1 & genes_initialize[1] == "random_var"){
-    printglue(("Option random_var not supported for initializing genes, using random instead."))
+    print(glue("Option random_var not supported for initializing genes, using random instead."))
     genes_method = "random"
   }
   

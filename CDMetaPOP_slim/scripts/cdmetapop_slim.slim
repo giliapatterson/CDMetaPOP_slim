@@ -908,8 +908,8 @@ function (void)writeClassOutput(string outfile, logical header){
 function (void)writeIndOutput(string outfile, logical header){
 	if (header){
 		loci_names = sapply(0:(NLOCI-1), "paste0('L', applyValue);");
-		haplosome1_names = sapply(loci_names, "paste0('H1', applyValue);");
-		haplosome2_names = sapply(loci_names, "paste0('H2', applyValue);");
+		haplosome1_names = sapply(loci_names, "paste0(applyValue, 'A0');");
+		haplosome2_names = sapply(loci_names, "paste0(applyValue, 'A1');");
 		header_string = paste0("PatchID,XCOORD,YCOORD,ID,sex,age,size,mature,layeggs,", paste(c(haplosome1_names, haplosome2_names), sep = ","));
 		writeFile(outfile, header_string);
 		return;
