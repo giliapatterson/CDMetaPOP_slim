@@ -17,26 +17,27 @@ thisFile <- function() {
 script_directory <- dirname(thisFile())
 
 source(paste0(script_directory,"/file_processing_functions.r"))
-
+# source("file_processing_functions.r")
 parser <- ArgumentParser()
 
 parser$add_argument(
     "-d",
     "--parameter_directory",
-    default = '../../WCT_parameters/',
+    default = '../../../trout-and-frogs/trout_sim/trout_sim_parameters/',
     help = "Directory containing CDMetaPOP input files"
 )
 
 parser$add_argument(
     "-r",
     "--runvars_file_name",
+    default = '../../../trout-and-frogs/trout_sim/trout_sim_parameters/RunVars.csv',
     help = "Name of RunVars file for CDMetaPOP"
 )
 
 parser$add_argument(
     "-o",
     "--output_directory",
-    default = "../slim_params",
+    default = '../../../trout-and-frogs/trout_sim/trout_sim_parameters/slim_test_params/',
     help = "Directory for SLiM input files"
 )
 
@@ -70,8 +71,8 @@ for(run in 1:nruns){
     print(glue("gridformat {runvars$gridformat} is not supported. Using 'genalex' grid format."))
   }
 
-  if(climate_change){runvars_used <- c("Popvars", "runtime", "output_years", "cdclimgentime")}
-  if(!climate_change){runvars_used <- c("Popvars", "runtime", "output_years")}
+  if(climate_change){runvars_used <- c("Popvars", "sizecontrol","runtime", "output_years", "cdclimgentime")}
+  if(!climate_change){runvars_used <- c("Popvars", "sizecontrol", "runtime", "output_years")}
   runvars <- select(runvars, all_of(runvars_used))
   
   # Change entry for Popvars to match the Popvars file used for SLiM
@@ -142,14 +143,24 @@ for(run in 1:nruns){
   # CDMetaPOP classvars
   classvars = read_csv(paste0(param_directory, pull(patchvars, `Class Vars`)[1]), show_col_types = FALSE)
   # Remove unused columns
-  classvars_used = c("Age class", "Body Size Mean (mm)", "Body Size Std (mm)", "Distribution",
-                     "Age Mortality Out %", "Age Mortality Back %", "Migration Out Prob",
-                     "Migration Back Prob", "Straying Prob", "Dispersal Prob")
+  if(runvars$sizecontrol == 'Y'){
+    classvars_used = c("Age class", "Body Size Mean (mm)", "Body Size Std (mm)", "Distribution",
+                       "Age Mortality Out %", "Age Mortality Back %", "Migration Out Prob",
+                       "Migration Back Prob", "Straying Prob", "Dispersal Prob")
+  }
+  else{
+    classvars <- mutate(classvars, Maturation_F = as.numeric(str_split_i(Maturation, "~", 1)),
+                        Maturation_M = as.numeric(str_split_i(Maturation, "~", 2)))
+    classvars_used = c("Age class", "Distribution",
+                       "Age Mortality Out %", "Age Mortality Back %", "Migration Out Prob",
+                       "Migration Back Prob", "Straying Prob", "Dispersal Prob",
+                       "Maturation_F", "Maturation_M", "Fecundity Ind")
+  }
   classvars_out <- classvars |> select(all_of(classvars_used))
   
   # Write to file
   classvars_out_file = paste0(output_directory, "classvars.csv")
-  write_csv(classvars, classvars_out_file)
+  write_csv(classvars_out, classvars_out_file)
   
   # Update file in patchvars
   patchvars <- mutate(patchvars, classvars = classvars_out_file)
@@ -223,13 +234,22 @@ for(run in 1:nruns){
                     mature_eqn_int_m = str_split_1(popvars$mature_eqn_int[1], "~")[2],
                     mature_age = gsub("age", "", mature_default))
   ## 4. Remove unused variables and write to file
-  popvars_used <- c("xyfilename", "mate_cdmat", "matemoveno", "migrateout_cdmat",
-                    "migrateback_cdmat", "stray_cdmat", "disperse_cdmat",
-                    "mature_eqn_slope", "mature_eqn_int", "Egg_Mean_ans", "Egg_Mean_par1", "Egg_Mean_par2",
-                    "Egg_Mortality", "offno", "loci", "growth_Loo", "growth_R0", "growth_temp_max",
-                    "growth_temp_CV", "growth_temp_t0", "popmodel_par1", "mature_eqn_slope_f",
-                    "mature_eqn_slope_m", "mature_eqn_int_f", "mature_eqn_int_m", "mature_age",
-                    "popmodel", "startGenes")
+  if(runvars$sizecontrol == 'Y'){
+    popvars_used <- c("xyfilename", "mate_cdmat", "matemoveno", "migrateout_cdmat",
+                      "migrateback_cdmat", "stray_cdmat", "disperse_cdmat",
+                      "mature_eqn_slope", "mature_eqn_int", "Egg_Mean_ans", "Egg_Mean_par1", "Egg_Mean_par2",
+                      "Egg_Mortality", "offno", "loci", "growth_Loo", "growth_R0", "growth_temp_max",
+                      "growth_temp_CV", "growth_temp_t0", "popmodel_par1", "mature_eqn_slope_f",
+                      "mature_eqn_slope_m", "mature_eqn_int_f", "mature_eqn_int_m", "mature_age",
+                      "popmodel", "startGenes")
+  }
+  else{
+    popvars_used <- c("xyfilename", "mate_cdmat", "matemoveno", "migrateout_cdmat",
+                      "migrateback_cdmat", "stray_cdmat", "disperse_cdmat",
+                      "Egg_Mortality", "offno", "loci",
+                      "popmodel_par1",
+                      "popmodel", "startGenes")
+  }
   # For gene initialization method "random", check that number of alleles is a single number
   if(genes_method == "random"){
     
