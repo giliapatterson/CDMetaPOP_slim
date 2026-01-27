@@ -234,6 +234,9 @@ for(run in 1:nruns){
                     mature_eqn_int_m = str_split_1(popvars$mature_eqn_int[1], "~")[2],
                     mature_age = gsub("age", "", mature_default))
   ## 4. Remove unused variables and write to file
+  if(popvars$mutationtype != 'random'){
+    print(glue("Mutation type {popvars$mutationtype} not supported, using 'random'"))
+  }
   if(runvars$sizecontrol == 'Y'){
     popvars_used <- c("xyfilename", "mate_cdmat", "matemoveno", "migrateout_cdmat",
                       "migrateback_cdmat", "stray_cdmat", "disperse_cdmat",
@@ -241,14 +244,14 @@ for(run in 1:nruns){
                       "Egg_Mortality", "offno", "loci", "growth_Loo", "growth_R0", "growth_temp_max",
                       "growth_temp_CV", "growth_temp_t0", "popmodel_par1", "mature_eqn_slope_f",
                       "mature_eqn_slope_m", "mature_eqn_int_f", "mature_eqn_int_m", "mature_age",
-                      "popmodel", "startGenes")
+                      "popmodel", "startGenes", "muterate")
   }
   else{
     popvars_used <- c("xyfilename", "mate_cdmat", "matemoveno", "migrateout_cdmat",
                       "migrateback_cdmat", "stray_cdmat", "disperse_cdmat",
                       "Egg_Mortality", "offno", "loci",
                       "popmodel_par1",
-                      "popmodel", "startGenes")
+                      "popmodel", "startGenes", "muterate")
   }
   # For gene initialization method "random", check that number of alleles is a single number
   if(genes_method == "random"){

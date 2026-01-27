@@ -15,7 +15,7 @@ initialize() {
 		"BYCLASS", "summary_classAllTime.csv",
 		"FINISHED", "finished.txt",
 		"SCALEPOPSIZE", 1, // Decrease carrying capacities for testing
-		"NPATCHES", "all" // Decrease number of patches for testing
+		"NPATCHES", 'all' // Decrease number of patches for testing
 	);
 	// Set up parameters
 	setupParams(defaults);
@@ -116,6 +116,8 @@ STARTGENES first(){
 			all_loci = unique(gene_freqs.getValue('position'));
 			// Keep track of number of alleles for each locus
 			alleles_per_locus = integer(length(all_loci));
+			// Keep track of alleles for each locus
+			alleles_per_locus_vals = Dictionary();
 			for (locus_index in all_loci){
 				locus = all_loci[locus_index];
 				// Get alleles for the locus
@@ -123,6 +125,7 @@ STARTGENES first(){
 				freqs = locus_df.getValue('Frequency');
 				alleles = locus_df.getValue('allele');
 				alleles_per_locus[locus_index] = length(alleles);
+				alleles_per_locus_vals.setValue(locus_index, alleles);
 				// Select alleles for each genome
 				genome_alleles = sample(alleles, ngenomes, replace = T, weights = freqs);
 				// assign alleles counts to genomes
@@ -157,7 +160,10 @@ STARTGENES first(){
 		ngenomes = length(genomes);
 		// Record number of alleles for each locus
 		alleles_per_locus = integer(length(positions), fill1 = length(alleles));
+		// Keep track of alleles for each locus
+		alleles_per_locus_vals = Dictionary();
 		for (locus in positions){
+			alleles_per_locus_vals.setValue(locus, alleles);
 			// Get alleles for the locus
 			// Select alleles for each genome
 			genome_alleles = sample(alleles, ngenomes, replace = T);
@@ -184,6 +190,7 @@ STARTGENES first(){
 		}
 	}
 	defineConstant("ALLELES_PER_LOCUS", alleles_per_locus);
+	defineConstant("ALLELES_PER_LOCUS_VALS", alleles_per_locus_vals);
 	
 }
 
@@ -256,6 +263,44 @@ reproduction(NULL, "F") {
 			}
 		}
 	}
+}
+
+// Mutation
+modifyChild(p1) {
+	for (genome in child.haplosomes){
+		mutCount = rpois(1, MUTRATE * NLOCI);
+		if (mutCount){
+			mutSites = sample(0:(NLOCI-1), mutCount);
+			ind_mutations = genome.mutationsOfType(m1);
+			for (mutSite in mutSites){
+				ind_mut = ind_mutations[ind_mutations.position == mutSite];
+				current_allele = ind_mut.tag;
+				// Select a new allele from all possible alleles at that site
+				potential_alleles = ALLELES_PER_LOCUS_VALS.getValue(mutSite);
+				new_allele = sample(potential_alleles[potential_alleles != current_allele], 1);
+				//print("New mutation: old allele " + current_allele + " new allele " + new_allele);
+				// Add to genome
+				all_mutations = sim.mutationsOfType(m1);
+				mutsAtSite = all_mutations[all_mutations.position == mutSite];
+				matchingMut = mutsAtSite[mutsAtSite.tag == new_allele];
+				// If there is a mutation with the same allele already in the genome,
+				// don't make a new mutation
+				if (matchingMut.size() == 1){
+					genome.removeMutations(ind_mut);
+					genome.addMutations(matchingMut);
+				}
+				else{
+					// if not, make a new mutation with the new repeat count
+					genome.removeMutations(ind_mut);
+					new_mut = genome.addNewDrawnMutation(m1, mutSite);
+					new_mut.tag = new_allele;
+				}
+				//new_site = genome.mutationsOfType(m1)[genome.mutationsOfType(m1).position == mutSite];
+				//print("Post mutation at site " + " allele " + new_site.tag);
+			}
+		}
+	}
+	return T;
 }
 
 early(){
@@ -839,6 +884,10 @@ function (void)setupGlobalsFromPopVars(object<Dictionary>$ popvars){
 	dispersal_matrix = readCSV(popvars.getValue('disperse_cdmat'), colNames = asString(PATCHIDS));
 	if (NPATCHES != "all"){dispersal_matrix = dispersal_matrix.subsetColumns(PATCHIDS).subsetRows(PATCHIDS);}
 	defineGlobal("DISPERSELOCAL", dispersal_matrix.asMatrix());
+	
+	// Mutation rate
+	defineGlobal("MUTRATE", popvars.getValue("muterate"));
+
 }
 
 function (void)writeSubpopOutput(string outfile, logical header){
@@ -870,13 +919,13 @@ function (void)writeSubpopOutput(string outfile, logical header){
 		nalleles_total = length(unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(m1)));
 		nalleles = sapply(sim.subpopulations, "length(unique(applyValue.individuals.haplosomes.mutationsOfType(m1)));");
 		He_total = calcHeterozygosity(sim.subpopulations.individuals.haplosomes);
-		Ho_total = mean(sapply(sim.subpopulations.individuals, "calcPairHeterozygosity(applyValue.haplosomes[0], applyValue.haplosomes[1]);"));
+		Ho_total = mean(sapply(sim.subpopulations.individuals, "calcPairHeterozygosity(applyValue.haplosomes[0], applyValue.haplosomes[1], infiniteSites=F);"));
 		He_subpops = float(length(sim.subpopulations));
 		Ho_subpops = float(length(sim.subpopulations));
 		for (subpop in sim.subpopulations){
 			if (subpop.individualCount > 0){
 				He_subpops[subpop.id] = calcHeterozygosity(subpop.individuals.haplosomes);
-				Ho_subpops[subpop.id] = mean(sapply(subpop.individuals, "calcPairHeterozygosity(applyValue.haplosomes[0], applyValue.haplosomes[1]);"));
+				Ho_subpops[subpop.id] = mean(sapply(subpop.individuals, "calcPairHeterozygosity(applyValue.haplosomes[0], applyValue.haplosomes[1], infiniteSites=F);"));
 			}
 			else{
 				He_subpops[subpop.id] = -1;	
