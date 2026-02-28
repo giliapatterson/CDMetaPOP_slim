@@ -315,9 +315,6 @@ early(){
 		print("Growing Back");
 		grow('back');
 	}
-	ages = CLASSVARS.getValue("Age class");
-	defineGlobal("N_GROWTHBACK", sapply(ages, "sum(age_class(sim.subpopulations.individuals, 'age') == applyValue);"));
-
 	// Aging
 	print("Aging");
 	individuals = sim.subpopulations.individuals;
@@ -326,9 +323,14 @@ early(){
 		age0s = individuals[age_class(individuals, method = "age") == 0];
 		age0s.setValuesVectorized("size", rnorm(length(age0s), mean = CLASSVARS.getValue("Body Size Mean (mm)")[0], sd = CLASSVARS.getValue("Body Size Std (mm)")[0]));
 	}
+	ages = CLASSVARS.getValue("Age class");
+	if(SIZECONTROL) defineGlobal("N_GROWTHBACK", sapply(ages, "sum(age_class(sim.subpopulations.individuals, 'size') == applyValue);")); else defineGlobal("N_GROWTHBACK", sapply(ages, "sum(age_class(sim.subpopulations.individuals, 'age') == applyValue);"));
+
 	
 	// CDMetaPOP output here
-
+	
+	no_age0s = sim.subpopulations.individuals[age_class(sim.subpopulations.individuals, 'age') != 0];
+	defineGlobal("N_subpops", sapply(PATCHIDS, "sum(no_age0s.subpopulation.id == applyValue);"));
 }
 
 mutationEffect(m1) { return 1.0; }
@@ -359,6 +361,10 @@ late(){
 }
 
 late(){
+	defineGlobal("N1", sim.subpopulations.individualCount);
+	ages = CLASSVARS.getValue("Age class");
+	if (SIZECONTROL) defineGlobal("N1_AGE", sapply(ages, "sum(age_class(sim.subpopulations.individuals, 'size') == applyValue);")); else defineGlobal("N1_AGE", sapply(ages, "sum(age_class(sim.subpopulations.individuals, 'age') == applyValue);"));
+	
 	// Density dependent mortality
 	if(POPVARS.getValue("popmodel") == "packing"){
 		print("Packing out");
@@ -401,12 +407,7 @@ late(){
 	mature(individuals);
 	//print(sum(individuals.tagL0) + " individuals matured.");
 	// CDMetaPOP output here
-	defineGlobal("N1", sim.subpopulations.individualCount);
-	ages = CLASSVARS.getValue("Age class");
-	defineGlobal("N1_AGE", sapply(ages, "sum(age_class(sim.subpopulations.individuals, 'age') == applyValue);"));
 	
-	no_age0s = sim.subpopulations.individuals[age_class(sim.subpopulations.individuals, 'age') != 0];
-	defineGlobal("N_subpops", sapply(PATCHIDS, "sum(no_age0s.subpopulation.id == applyValue);"));
 }
 
 late(){
@@ -611,7 +612,7 @@ function (float)prob_mature_age(string sex, integer age){
 	if (sex == "M"){
 		p_mature = CLASSVARS.getValue("Maturation_M")[age_i];
 	}
-	return(p_mature);
+	return(asFloat(p_mature));
 }
 
 // Calculate probability of maturity based on size
