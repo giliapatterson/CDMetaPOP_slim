@@ -8,12 +8,12 @@ initialize() {
 	// then the values of the default parameters will be overridden with the values sepcified
 	defaults = Dictionary(
 		"SEED", getSeed(), // random seed
-		"RUNVARS_FILE", '../../../trout-and-frogs/trout_sim/trout_sim_parameters/slim_test_params/run1/RunVars_slim.csv', // File containing run info
+		"RUNVARS_FILE", 'testing_example/slim_output/slim_parameters/run1/RunVars_slim.csv', // File containing run info
 		"PARAM_FOLDER", "./", // Folder containing parameter files
-		"IND_OUT_FOLDER", "../../../trout-and-frogs/trout_sim/trout_sim_parameters/slim_test_params/", // Folder for individual output
-		"ALLPOPS_OUT", "summary_popAllTime.csv",
-		"BYCLASS", "summary_classAllTime.csv",
-		"FINISHED", "finished.txt",
+		"IND_OUT_FOLDER", "testing_example/slimgui_testing/", // Folder for individual output
+		"ALLPOPS_OUT", "testing_example/slimgui_testing/summary_popAllTime.csv",
+		"BYCLASS", "testing_example/slimgui_testing/summary_classAllTime.csv",
+		"FINISHED", "testing_example/slimgui_testing/finished.txt",
 		"SCALEPOPSIZE", 1, // Decrease carrying capacities for testing
 		"NPATCHES", 'all' // Decrease number of patches for testing
 	);
@@ -204,6 +204,9 @@ CHANGE_YEARS first(){
 }
 
 first(){
+	// Update Ks
+	defineGlobal("PATCHKS", rnorm(length(PATCHVARS.getValue('K')[PATCHIDS]), PATCHVARS.getValue('K')[PATCHIDS]*SCALEPOPSIZE, PATCHVARS.getValue('K StDev')[PATCHIDS]*SCALEPOPSIZE));
+	
 	defineGlobal("N_INITIAL", sim.subpopulations.individualCount);
 	ages = CLASSVARS.getValue("Age class");
 	defineGlobal("N_INITIAL_AGE", sapply(ages, "sum(age_class(sim.subpopulations.individuals, 'age') == applyValue);"));
@@ -268,8 +271,10 @@ reproduction(NULL, "F") {
 // Mutation
 modifyChild(p1) {
 	for (genome in child.haplosomes){
-		mutCount = rpois(1, MUTRATE * NLOCI);
+		if(MUTRATE * NLOCI > 0) mutCount = rpois(1, MUTRATE * NLOCI);
+		else mutCount = 0;
 		if (mutCount){
+			print("Mutation count!");
 			mutSites = sample(0:(NLOCI-1), mutCount);
 			ind_mutations = genome.mutationsOfType(m1);
 			for (mutSite in mutSites){
@@ -304,15 +309,13 @@ modifyChild(p1) {
 }
 
 early(){
-	defineGlobal("N1", sim.subpopulations.individualCount);
-	ages = CLASSVARS.getValue("Age class");
-	defineGlobal("N1_AGE", sapply(ages, "sum(age_class(sim.subpopulations.individuals, 'age') == applyValue);"));
 	
 	if (SIZECONTROL){
 		// Growth for "Back"
 		print("Growing Back");
 		grow('back');
 	}
+	ages = CLASSVARS.getValue("Age class");
 	defineGlobal("N_GROWTHBACK", sapply(ages, "sum(age_class(sim.subpopulations.individuals, 'age') == applyValue);"));
 
 	// Aging
@@ -325,10 +328,19 @@ early(){
 	}
 	
 	// CDMetaPOP output here
-	
+
 }
 
 mutationEffect(m1) { return 1.0; }
+
+OUTPUT_TICKS late(){
+	
+	// Individual output
+	print("Writing individual output");
+	outfile = IND_OUT_FOLDER + paste0('ind', community.tick, '.csv');
+	writeIndOutput(outfile, header = T);
+	writeIndOutput(outfile, header = F);
+}
 
 late(){
 	print("Migration Out");
@@ -367,7 +379,9 @@ late(){
 	individuals = sim.subpopulations.individuals;
 	age_classes = age_class(individuals, method = "age");
 	prob_dies = CLASSVARS.getValue("Age Mortality Out %")[age_classes];
-	sim.killIndividuals(individuals[runif(length(individuals)) < prob_dies]);
+	kill = individuals[runif(length(individuals)) < prob_dies];
+	sim.killIndividuals(kill);
+	print(length(kill) + " individuals died.");
 }
 
 late(){
@@ -380,13 +394,19 @@ late(){
 
 late(){
 	// Maturing
-	//("Maturing");
+	print("Maturing");
 	// Find individuals that aren't yet mature
 	individuals = sim.subpopulations.subsetIndividuals(tagL0 = F);
 	//print(length(individuals) + " individuals aren't yet mature.");
 	mature(individuals);
 	//print(sum(individuals.tagL0) + " individuals matured.");
 	// CDMetaPOP output here
+	defineGlobal("N1", sim.subpopulations.individualCount);
+	ages = CLASSVARS.getValue("Age class");
+	defineGlobal("N1_AGE", sapply(ages, "sum(age_class(sim.subpopulations.individuals, 'age') == applyValue);"));
+	
+	no_age0s = sim.subpopulations.individuals[age_class(sim.subpopulations.individuals, 'age') != 0];
+	defineGlobal("N_subpops", sapply(PATCHIDS, "sum(no_age0s.subpopulation.id == applyValue);"));
 }
 
 late(){
@@ -414,7 +434,30 @@ late(){
 	//print(length(migrators) + " individuals migrated back, " + length(strayers) + " strayed.");
 }
 
+late(){
+	print("Dispersal");
+	// Dispersal
+	all_inds = sim.subpopulations.individuals;
+	all_ages = age_class(all_inds, method = "age");
+	individuals = all_inds[all_ages >=0];
+	if (SIZECONTROL) age_classes = age_class(individuals, method = "size"); else age_classes = age_class(individuals, method = "age");
+	pdisperse = PATCHVARS.getValue("Dispersal Prob")[individuals.subpopulation.id]*CLASSVARS.getValue("Dispersal Prob")[age_classes];
+	dispersers = individuals[runif(length(individuals)) < pdisperse];
+	print(length(dispersers) + " individuals dispersed.");
+	destinations = sample_subpops(dispersers, DISPERSELOCAL);
+	for(source in unique(dispersers.subpopulation)){
+		source_dispersers = dispersers[dispersers.subpopulation == source];
+		print("Source: " + source.id + " Dispersers: " + length(source_dispersers));
+		for (dest in unique(destinations)){
+			source_dest = dispersers[dispersers.subpopulation == source & destinations == dest];
+			print("     Destination: " + dest.id + " " + length(source_dest) + " " + length(source_dest)/length(source_dispersers));
+		}
+	}
+	for (dest in unique(destinations)){dest.takeMigrants(dispersers[destinations == dest]);}
+}
+
 late() {
+	
 	// Density dependent mortality
 	if(POPVARS.getValue("popmodel") == "packing"){
 		print("Packing back");
@@ -431,37 +474,16 @@ late() {
 }
 
 late(){
-	print("Dispersal");
-	// Dispersal
-	all_inds = sim.subpopulations.individuals;
-	all_ages = age_class(all_inds, method = "age");
-	individuals = all_inds[all_ages >=0];
-	if (SIZECONTROL) age_classes = age_class(individuals, method = "size"); else age_classes = age_class(individuals, method = "age");
-	pdisperse = PATCHVARS.getValue("Dispersal Prob")[individuals.subpopulation.id]*CLASSVARS.getValue("Dispersal Prob")[age_classes];
-	dispersers = individuals[runif(length(individuals)) < pdisperse];
-	//print(length(dispersers) + " individuals dispersed.");
-	destinations = sample_subpops(dispersers, DISPERSELOCAL);
-	for (dest in unique(destinations)){dest.takeMigrants(dispersers[destinations == dest]);}
-}
-
-late(){
 	// Age-dependent mortality back
 	print("Age-dependent mortality back");
 	individuals = sim.subpopulations.individuals;
 	age_classes = age_class(individuals, method = "age");
 	prob_dies = CLASSVARS.getValue("Age Mortality Back %")[age_classes];
-	sim.killIndividuals(individuals[runif(length(individuals)) < prob_dies]);
+	kill = individuals[runif(length(individuals)) < prob_dies];
+	sim.killIndividuals(kill);
+	print(length(kill) + " individuals died.");
 	
 	defineGlobal("N2", sim.subpopulations.individualCount);
-}
-
-
-OUTPUT_TICKS late(){
-	// Individual output
-	print("Writing individual output");
-	outfile = IND_OUT_FOLDER + paste0('ind', community.tick, '.csv');
-	writeIndOutput(outfile, header = T);
-	writeIndOutput(outfile, header = F);
 }
 
 late(){
@@ -594,21 +616,26 @@ function (float)prob_mature_age(string sex, integer age){
 
 // Calculate probability of maturity based on size
 function (float)prob_mature_size(float size, string sex, integer age){
-	if(age >= POPVARS.getValue("mature_age")){
-		return(1.0);
-	}
-	else{
-		if (sex == "F"){
+	if (sex == "F"){
+		if(age >= POPVARS.getValue("mature_age_f")){
+			return(1.0);
+		}
+		else{
 			intercept = POPVARS.getValue("mature_eqn_int_f");
 			slope = POPVARS.getValue("mature_eqn_slope_f");
 		}
-		if (sex == "M"){
+	}
+	if (sex == "M"){
+		if(age >= POPVARS.getValue("mature_age_m")){
+			return(1.0);
+		}
+		else{
 			intercept = POPVARS.getValue("mature_eqn_int_m");
 			slope = POPVARS.getValue("mature_eqn_slope_m");
 		}
-		p_mature = exp(intercept + slope*size) / (1 + exp(intercept + slope*size));
-		return(p_mature);
 	}
+	p_mature = exp(intercept + slope*size) / (1 + exp(intercept + slope*size));
+	return(p_mature);
 }
 
 function (void)mature(object <Individual> individuals){
@@ -656,7 +683,8 @@ function (integer)packing_survivors(object<Subpopulation> pack_subpop, string ag
 		if (Kage == 0) Kage_hab_adj = Kage_hab;
 		else Kage_hab_adj = Kage_hab - (Kused * Kage_hab / Kage);
 	}
-	return(asInteger(nsurvive));
+
+	return(asInteger(round(nsurvive)));
 }
 
 function (object <Dictionary>)packing(void){
@@ -783,18 +811,19 @@ function (void)setupConstantsFromPopVars(object<Dictionary>$ popvars)
 	defineConstant("PATCHVARS", readCSV(PARAM_FOLDER + popvars.getValue("xyfilename")[0]));
 	patchids = (1:length(PATCHVARS.getValue("PatchID")))-1;
 	patchks = PATCHVARS.getValue("K")*SCALEPOPSIZE;
+	patchstdevs = PATCHVARS.getValue("K StDev")*SCALEPOPSIZE;
 	patchn0s = PATCHVARS.getValue("N0")*SCALEPOPSIZE*PATCHVARS.getValue("Natal Grounds");
 	// Files containing allele frequencies
 	patch_genefiles = PATCHVARS.getValue("genes_file_slim");
 	if(NPATCHES != "all"){
 		defineConstant("PATCHIDS", patchids[0:(NPATCHES-1)]);
-		defineConstant("PATCHKS", patchks[PATCHIDS]);
+		defineGlobal("PATCHKS", rnorm(length(patchks[PATCHIDS]), patchks[PATCHIDS], patchstdevs[PATCHIDS]));
 		defineConstant("PATCHN0S", patchn0s[PATCHIDS]);
 		defineConstant("GENEFILES", patch_genefiles[PATCHIDS]);
 	}
 	if(NPATCHES == "all"){
 		defineConstant("PATCHIDS", patchids);
-		defineConstant("PATCHKS", patchks);
+		defineGlobal("PATCHKS", rnorm(length(patchks), patchks, patchstdevs));
 		defineConstant("PATCHN0S", patchn0s);
 		defineConstant("GENEFILES", patch_genefiles);
 	}
@@ -899,8 +928,8 @@ function (void)writeSubpopOutput(string outfile, logical header){
 	K = paste(c(sum(PATCHKS),PATCHKS), sep = "|");
 	GrowthRate = sum(sim.subpopulations.individualCount)/sum(N_INITIAL);
 	N_Initial = paste(c(sum(N_INITIAL), N_INITIAL), sep = "|");
-	PopSizes_Mean = mean(sim.subpopulations.individualCount);
-	PopSizes_Std = sd(sim.subpopulations.individualCount);
+	PopSizes_Mean = mean(N_subpops);
+	PopSizes_Std = sd(N_subpops);
 	N_Females = paste(c(sum(SUBPOP_NFEMALES), SUBPOP_NFEMALES), sep = "|");
 	N_Males = paste(c(sum(SUBPOP_NMALES), SUBPOP_NMALES), sep = "|");
 	N_MatureFemales = paste(c(sum(SUBPOP_NMATUREFEMALES), SUBPOP_NMATUREFEMALES), sep = "|");

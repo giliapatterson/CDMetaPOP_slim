@@ -233,6 +233,14 @@ for(run in 1:nruns){
                     mature_eqn_int_f = str_split_1(popvars$mature_eqn_int[1], "~")[1],
                     mature_eqn_int_m = str_split_1(popvars$mature_eqn_int[1], "~")[2],
                     mature_age = gsub("age", "", mature_default))
+  if(grep("~", popvars_new$mature_age)){
+    popvars_new$mature_age_f = str_split_1(popvars_new$mature_age, "~")[1]
+    popvars_new$mature_age_m = str_split_1(popvars_new$mature_age, "~")[2]
+  }
+  else{
+    popvars_new$mature_age_f = popvars_new$mature_age
+    popvars_new$mature_age_m = popvars_new$mature_age
+  }
   ## 4. Remove unused variables and write to file
   if(popvars$mutationtype != 'random'){
     print(glue("Mutation type {popvars$mutationtype} not supported, using 'random'"))
@@ -243,7 +251,7 @@ for(run in 1:nruns){
                       "mature_eqn_slope", "mature_eqn_int", "Egg_Mean_ans", "Egg_Mean_par1", "Egg_Mean_par2",
                       "Egg_Mortality", "offno", "loci", "growth_Loo", "growth_R0", "growth_temp_max",
                       "growth_temp_CV", "growth_temp_t0", "popmodel_par1", "mature_eqn_slope_f",
-                      "mature_eqn_slope_m", "mature_eqn_int_f", "mature_eqn_int_m", "mature_age",
+                      "mature_eqn_slope_m", "mature_eqn_int_f", "mature_eqn_int_m", "mature_age_f", "mature_age_m",
                       "popmodel", "startGenes", "muterate")
   }
   else{
