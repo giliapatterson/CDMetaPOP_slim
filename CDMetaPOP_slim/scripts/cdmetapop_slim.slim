@@ -533,7 +533,7 @@ function (integer)num_eggs(object<Individual> ind){
 	if(SIZECONTROL){
 		if(POPVARS.getValue("Egg_Mean_ans") == "exp" & POPVARS.getValue("offno") == 2){
 			E_mu = POPVARS.getValue("Egg_Mean_par1")*exp(POPVARS.getValue("Egg_Mean_par2")*ind.getValue("size"));
-			noffspring = rpois(1, E_mu);
+			if(E_mu > 0) noffspring = rpois(1, E_mu); else noffspring = 0;
 			return(noffspring);
 		}
 		else{
@@ -545,7 +545,7 @@ function (integer)num_eggs(object<Individual> ind){
 		if(POPVARS.getValue("offno") == 2){
 			age_i = which(CLASSVARS.getValue("Age class") == age_class(ind, 'age'));
 			E_mu = CLASSVARS.getValue("Fecundity Ind")[age_i];
-			noffspring = rpois(1, E_mu);
+			if(E_mu > 0) noffspring = rpois(1, E_mu); else noffspring = 0;
 			return(noffspring);
 		}
 		else{
@@ -607,10 +607,20 @@ function (void)grow(string step){
 function (float)prob_mature_age(string sex, integer age){
 	age_i = which(CLASSVARS.getValue("Age class") == age);
 	if (sex == "F"){
-		p_mature = CLASSVARS.getValue("Maturation_F")[age_i];
+		if(age >= POPVARS.getValue("mature_age_f")){
+			return(1.0);
+		}
+		else{
+			p_mature = CLASSVARS.getValue("Maturation_F")[age_i];
+		}
 	}
 	if (sex == "M"){
-		p_mature = CLASSVARS.getValue("Maturation_M")[age_i];
+		if(age >= POPVARS.getValue("mature_age_m")){
+			return(1.0);
+		}
+		else{
+			p_mature = CLASSVARS.getValue("Maturation_M")[age_i];
+		}
 	}
 	return(asFloat(p_mature));
 }
@@ -648,6 +658,7 @@ function (void)mature(object <Individual> individuals){
 		pmature = sapply(individuals, "prob_mature_age(applyValue.sex, age_class(applyValue, 'age'));");
 	}
 	individuals.tagL0 = runif(length(individuals)) < pmature;
+	print(mean(individuals.tagL0) + " prop matured");
 	return;
 }
 	
