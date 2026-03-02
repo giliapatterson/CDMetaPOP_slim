@@ -149,9 +149,15 @@ for(run in 1:nruns){
                        "Migration Back Prob", "Straying Prob", "Dispersal Prob")
   }
   else{
-    classvars <- mutate(classvars, Maturation_F = as.numeric(str_split_i(Maturation, "~", 1)),
-                        Maturation_M = as.numeric(str_split_i(Maturation, "~", 2)))
-    classvars_used = c("Age class", "Distribution",
+    if(grepl("~", classvars$Maturation)[1]){
+      classvars <- mutate(classvars, Maturation_F = as.numeric(str_split_i(Maturation, "~", 1)),
+                          Maturation_M = as.numeric(str_split_i(Maturation, "~", 2)))
+    }
+    else{
+      classvars <- mutate(classvars, Maturation_F = Maturation,
+                          Maturation_M = Maturation)
+    }
+    classvars_used = c("Age class", "Body Size Mean (mm)", "Body Size Std (mm)", "Distribution",
                        "Age Mortality Out %", "Age Mortality Back %", "Migration Out Prob",
                        "Migration Back Prob", "Straying Prob", "Dispersal Prob",
                        "Maturation_F", "Maturation_M", "Fecundity Ind")
@@ -257,7 +263,7 @@ for(run in 1:nruns){
   else{
     popvars_used <- c("xyfilename", "mate_cdmat", "matemoveno", "migrateout_cdmat",
                       "migrateback_cdmat", "stray_cdmat", "disperse_cdmat",
-                      "Egg_Mortality", "offno", "loci",
+                      "Egg_Mortality", "offno", "loci", "mature_age_f", "mature_age_m",
                       "popmodel_par1",
                       "popmodel", "startGenes", "muterate")
   }

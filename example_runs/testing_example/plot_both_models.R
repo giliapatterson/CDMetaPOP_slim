@@ -21,17 +21,17 @@ process_summary_pop <- function(results, separated_by_string = "Patch", includes
   out_df[out_df == -1] = NA
   return(out_df)
 }
-
-slim_results <- read_csv("slimgui_testing/summary_popAllTime.csv")
-cdmp_results <- read_csv("cdmetapop_results1772226443/run0batch0mc0species0/summary_popAllTime.csv")
+slim_results <- read_csv("slim_output/run0batch0mc0species0/summary_popAllTime.csv")
+cdmp_results <- read_csv("cdmetapop_results1772494177/run0batch0mc0species0/summary_popAllTime.csv")
 slim <- process_summary_pop(slim_results) |> mutate(Year = Year - 1)
 cdmp <- process_summary_pop(cdmp_results)
 all_patches <- bind_rows(list(slim = slim, cdmp = cdmp), .id = "method") |> filter(!is.na(K))
+
 all <- filter(all_patches, Patch == "all")
 patches <- filter(all_patches, Patch != 'all')
 
-slim_class_results <- read_csv("slimgui_testing/summary_classAllTime.csv")
-cdmp_class_results <- read_csv("cdmetapop_results1772226443/run0batch0mc0species0/summary_classAllTime.csv")
+slim_class_results <- read_csv("slim_output/run0batch0mc0species0/summary_classAllTime.csv")
+cdmp_class_results <- read_csv("cdmetapop_results1772494177/run0batch0mc0species0/summary_classAllTime.csv")
 slim_class <- process_summary_pop(slim_class_results, separated_by_string = "Class", includes_all = FALSE)
 cdmp_class <- process_summary_pop(cdmp_class_results, separated_by_string = "Class", includes_all = FALSE)
 all_class <- bind_rows(list(slim = slim_class, cdmp = cdmp_class), .id = "method") 
@@ -79,21 +79,26 @@ ggplot(all_class, aes(x = Year, y = N_Initial_Age, color = method)) +
 ggplot(all_class, aes(x = Year, y = N_Initial_Class, color = method)) +
   geom_point(alpha = 0.5) +
   facet_wrap(~Class, scales = "free")
+
+
 ggplot(all_class, aes(x = Year, y = PackingDeaths_Emigration, color = method)) +
   geom_point(alpha = 0.4) +
-  geom_line() +
+  geom_line(alpha = 0.5) +
   facet_wrap(~Class, scales = "free")
 ggplot(all_class, aes(x = Year, y = PackingDeaths_Immigration, color = method)) +
   geom_point(alpha = 0.5) +
-  geom_line() +
+  geom_line(alpha = 0.5) +
   facet_wrap(~Class, scales = "free")
 ggplot(all_class, aes(x = Year, y = N_BeforePacking_AddAge0s, color = method)) +
   geom_point(alpha = 0.5) +
   facet_wrap(~Class, scales = "free")
+ggplot(all_class, aes(x = Year, y = N_GrowthBack, color = method)) +
+  geom_point(alpha = 0.5) +
+  facet_wrap(~Class, scales = "free")
+
 ggplot(all, aes(x = Year, y = PopSizes_Mean, color = method)) +
   geom_point(alpha = 0.5) + 
   geom_line(alpha = 0.5)
-
 ggplot(all, aes(x = Year, y = PopSizes_Std, color = method)) +
   geom_point(alpha = 0.5) + 
   geom_line(alpha = 0.5)
@@ -116,12 +121,21 @@ ggplot(patches, aes(x = Year, y = N_MatureMales, color = method)) +
 ggplot(all, aes(x = Year, y = MatureCount/N_Initial, color = method)) +
   geom_point(alpha = 0.5) + 
   geom_line(alpha = 0.5)
+ggplot(all, aes(x = Year, y = N_MatureFemales/N_Initial, color = method)) +
+  geom_point(alpha = 0.5) + 
+  geom_line(alpha = 0.5)
+ggplot(all, aes(x = Year, y = N_MatureMales/N_Initial, color = method)) +
+  geom_point(alpha = 0.5) + 
+  geom_line(alpha = 0.5)
 
 ggplot(all, aes(x = Year, y = EggLayEvents, color = method)) +
   geom_point(alpha = 0.5) + 
   geom_line(alpha = 0.5)
-
 ggplot(all, aes(x = Year, y = EggDeaths, color = method)) +
+  geom_point(alpha = 0.5) + 
+  geom_line(alpha = 0.5)
+
+ggplot(all, aes(x = Year, y = EggDeaths/N_MatureFemales, color = method)) +
   geom_point(alpha = 0.5) + 
   geom_line(alpha = 0.5)
 
@@ -220,7 +234,7 @@ class_sizes <- all_class |> group_by(method, Class) |>
             mean_size_std = mean(AgeSize_Std, na.rm = TRUE),
             class_size_std = mean(ClassSize_Std, na.rm = TRUE))
 
-ggplot(class_sizes, aes(x = Class, y = mean_size, color = method)) +
+ggplot(class_sizes, aes(x = Ages, y = mean_size, color = method)) +
   geom_point(alpha = 0.5)
 ggplot(class_sizes, aes(x = Class, y = class_mean_size, color = method)) +
   geom_point(alpha = 0.5)

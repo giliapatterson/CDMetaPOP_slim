@@ -90,10 +90,8 @@ first(){
 			cdmp_ages = sample(CLASSVARS.getValue("Age class"), size = new_subpop.individualCount, replace = T, weights = CLASSVARS.getValue("Distribution"));
 			// Keep track of age separately so that it can be updated in the correct order
 			individuals.setValuesVectorized("cdmp_age", cdmp_ages);
-			if (SIZECONTROL){
-				// Initial sizes
-				individuals.setValuesVectorized("size", rnorm(new_subpop.individualCount, mean = CLASSVARS.getValue("Body Size Mean (mm)")[cdmp_ages], sd = CLASSVARS.getValue("Body Size Std (mm)")[cdmp_ages]));
-			}
+			// Initial sizes
+			individuals.setValuesVectorized("size", rnorm(new_subpop.individualCount, mean = CLASSVARS.getValue("Body Size Mean (mm)")[cdmp_ages], sd = CLASSVARS.getValue("Body Size Std (mm)")[cdmp_ages]));
 			// Set maturity
 			mature(individuals);
 			individuals.tagL1 = F; // Lay eggs
@@ -210,7 +208,7 @@ first(){
 	defineGlobal("N_INITIAL", sim.subpopulations.individualCount);
 	ages = CLASSVARS.getValue("Age class");
 	defineGlobal("N_INITIAL_AGE", sapply(ages, "sum(age_class(sim.subpopulations.individuals, 'age') == applyValue);"));
-	defineGlobal("N_INITIAL_CLASS", sapply(ages, "sum(age_class(sim.subpopulations.individuals, 'size') == applyValue);"));
+	if (SIZECONTROL) defineGlobal("N_INITIAL_CLASS", sapply(ages, "sum(age_class(sim.subpopulations.individuals, 'size') == applyValue);")); else defineGlobal("N_INITIAL_CLASS", sapply(ages, "sum(age_class(sim.subpopulations.individuals, 'age') == applyValue);"));
 	defineGlobal("EGGLAYEVENTS", 0);
 	defineGlobal("BIRTHS", integer(length(sim.subpopulations)));
 	defineGlobal("EGGDEATHS", integer(length(sim.subpopulations)));
@@ -222,6 +220,7 @@ first(){
 
 first(){
 	print("Reproduction");
+	individuals = sim.subpopulations.individuals;
 }
 
 reproduction(NULL, "F") {
@@ -319,18 +318,24 @@ early(){
 	print("Aging");
 	individuals = sim.subpopulations.individuals;
 	individuals.setValuesVectorized("cdmp_age", individuals.getValue("cdmp_age") + 1);
-	if (SIZECONTROL){
-		age0s = individuals[age_class(individuals, method = "age") == 0];
-		age0s.setValuesVectorized("size", rnorm(length(age0s), mean = CLASSVARS.getValue("Body Size Mean (mm)")[0], sd = CLASSVARS.getValue("Body Size Std (mm)")[0]));
+	age0s = individuals[age_class(individuals, method = "age") == 0];
+	age0s.setValuesVectorized("size", rnorm(length(age0s), mean = CLASSVARS.getValue("Body Size Mean (mm)")[0], sd = CLASSVARS.getValue("Body Size Std (mm)")[0]));
+	if(!SIZECONTROL){
+		// Mature age 0s if SIZECONTROL is not operationg
+		// Note that this behavior is for consistency with CDMetaPOP, and could be a bug in CDMetaPOP
+		mature(age0s);
+		// Set new body sizes based on age (but don't let individuals shrink)
+		individuals = sim.subpopulations.individuals[age_class(sim.subpopulations.individuals, 'age') != 0];
+		ages = age_class(individuals, method = "age");
+		potential_new_sizes =  rnorm(length(individuals), mean = CLASSVARS.getValue("Body Size Mean (mm)")[ages], sd = CLASSVARS.getValue("Body Size Std (mm)")[ages]);
+		individuals.setValuesVectorized('size', pmax(individuals.getValue('size'), potential_new_sizes));
 	}
-	ages = CLASSVARS.getValue("Age class");
-	if(SIZECONTROL) defineGlobal("N_GROWTHBACK", sapply(ages, "sum(age_class(sim.subpopulations.individuals, 'size') == applyValue);")); else defineGlobal("N_GROWTHBACK", sapply(ages, "sum(age_class(sim.subpopulations.individuals, 'age') == applyValue);"));
+	
+	ages = CLASSVARS.getValue("Age class")[CLASSVARS.getValue("Age class") != 0];
+	if(SIZECONTROL) defineGlobal("N_GROWTHBACK", c(0, sapply(ages, "sum(age_class(sim.subpopulations.individuals, 'size') == applyValue);"))); else defineGlobal("N_GROWTHBACK", c(0, sapply(ages, "sum(age_class(sim.subpopulations.individuals, 'age') == applyValue);")));
 
 	
 	// CDMetaPOP output here
-	
-	no_age0s = sim.subpopulations.individuals[age_class(sim.subpopulations.individuals, 'age') != 0];
-	defineGlobal("N_subpops", sapply(PATCHIDS, "sum(no_age0s.subpopulation.id == applyValue);"));
 }
 
 mutationEffect(m1) { return 1.0; }
@@ -388,6 +393,10 @@ late(){
 	kill = individuals[runif(length(individuals)) < prob_dies];
 	sim.killIndividuals(kill);
 	print(length(kill) + " individuals died.");
+	individuals = sim.subpopulations.individuals;
+	age0s = individuals[age_class(individuals, method = "age") == 0];
+	print(length(age0s) + " total age 0s");
+	print(sum(age0s.tagL0) + " mature age 0s");
 }
 
 late(){
@@ -407,7 +416,10 @@ late(){
 	mature(individuals);
 	//print(sum(individuals.tagL0) + " individuals matured.");
 	// CDMetaPOP output here
-	
+	individuals = sim.subpopulations.individuals;
+	age0s = individuals[age_class(individuals, method = "age") == 0];
+	print(length(age0s) + " total age 0s");
+	print(sum(age0s.tagL0) + " mature age 0s");
 }
 
 late(){
@@ -658,7 +670,7 @@ function (void)mature(object <Individual> individuals){
 		pmature = sapply(individuals, "prob_mature_age(applyValue.sex, age_class(applyValue, 'age'));");
 	}
 	individuals.tagL0 = runif(length(individuals)) < pmature;
-	print(mean(individuals.tagL0) + " prop matured");
+	//print(mean(individuals.tagL0) + " prop matured");
 	return;
 }
 	
@@ -940,8 +952,8 @@ function (void)writeSubpopOutput(string outfile, logical header){
 	K = paste(c(sum(PATCHKS),PATCHKS), sep = "|");
 	GrowthRate = sum(sim.subpopulations.individualCount)/sum(N_INITIAL);
 	N_Initial = paste(c(sum(N_INITIAL), N_INITIAL), sep = "|");
-	PopSizes_Mean = mean(N_subpops);
-	PopSizes_Std = sd(N_subpops);
+	PopSizes_Mean = mean(N_INITIAL);
+	PopSizes_Std = sd(N_INITIAL);
 	N_Females = paste(c(sum(SUBPOP_NFEMALES), SUBPOP_NFEMALES), sep = "|");
 	N_Males = paste(c(sum(SUBPOP_NMALES), SUBPOP_NMALES), sep = "|");
 	N_MatureFemales = paste(c(sum(SUBPOP_NMATUREFEMALES), SUBPOP_NMATUREFEMALES), sep = "|");
@@ -1002,24 +1014,18 @@ function (void)writeClassOutput(string outfile, logical header){
 	N_Initial_Age = paste(N_INITIAL_AGE, sep = "|");
 	// helper variables
 	ages = CLASSVARS.getValue("Age class");
-	if(SIZECONTROL){
-		mean_sizes = float(length(ages));
-		sd_sizes = float(length(ages));
-		for (i in seqAlong(ages)){
-			age_subset = sim.subpopulations.individuals[age_class(sim.subpopulations.individuals, 'age') == ages[i]];
-			if(length(age_subset) > 0){
-				mean_sizes[i] = mean(age_subset.getValue("size"));
-				sd_sizes[i] = sd(age_subset.getValue("size"));
-			}
-			else{
-				mean_sizes[i] = -1;
-				sd_sizes[i] = -1;
-			}
+	mean_sizes = float(length(ages));
+	sd_sizes = float(length(ages));
+	for (i in seqAlong(ages)){
+		age_subset = sim.subpopulations.individuals[age_class(sim.subpopulations.individuals, 'age') == ages[i]];
+		if(length(age_subset) > 0){
+			mean_sizes[i] = mean(age_subset.getValue("size"));
+			sd_sizes[i] = sd(age_subset.getValue("size"));
 		}
-	}
-	else{
-		mean_sizes = rep("NA", length(ages));
-		sd_sizes = rep("NA", length(ages));
+		else{
+			mean_sizes[i] = -1;
+			sd_sizes[i] = -1;
+		}
 	}
 	// end helper variables
 	AgeSize_Mean = paste(mean_sizes, sep = "|");
@@ -1027,24 +1033,18 @@ function (void)writeClassOutput(string outfile, logical header){
 	Size_Classes = paste(CLASSVARS.getValue("Body Size Mean (mm)"), sep = "|");
 	N_Initial_Class = paste(N_INITIAL_CLASS, sep = "|");
 	// helper variables
-	if(SIZECONTROL){
-		mean_sizes = float(length(ages));
-		sd_sizes = float(length(ages));
-		for (i in seqAlong(ages)){
-			age_subset = sim.subpopulations.individuals[age_class(sim.subpopulations.individuals, 'size') == ages[i]];
-			if(length(age_subset) > 0){
-				mean_sizes[i] = mean(age_subset.getValue("size"));
-				sd_sizes[i] = sd(age_subset.getValue("size"));
-			}
-			else{
-				mean_sizes[i] = -1;
-				sd_sizes[i] = -1;
-			}
+	mean_sizes = float(length(ages));
+	sd_sizes = float(length(ages));
+	for (i in seqAlong(ages)){
+		age_subset = sim.subpopulations.individuals[age_class(sim.subpopulations.individuals, 'size') == ages[i]];
+		if(length(age_subset) > 0){
+			mean_sizes[i] = mean(age_subset.getValue("size"));
+			sd_sizes[i] = sd(age_subset.getValue("size"));
 		}
-	}
-	else{
-		mean_sizes = rep("NA", length(ages));
-		sd_sizes = rep("NA", length(ages));
+		else{
+			mean_sizes[i] = -1;
+			sd_sizes[i] = -1;
+		}
 	}
 	// end helper variables
 	ClassSize_Mean = paste(mean_sizes, sep = "|");
