@@ -1,3 +1,7 @@
+add_one <- function(year_string){
+  return(paste(as.numeric(str_split_1(year_string, fixed("|"))) + 1, collapse = "|"))
+}
+
 # Function to extract loci, alleles, and frequencies
 split_genes <- function(gene_file, PatchID){
   genes <- read_csv(gene_file, show_col_types = FALSE)
