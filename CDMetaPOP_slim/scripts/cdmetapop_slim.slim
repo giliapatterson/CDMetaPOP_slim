@@ -8,12 +8,12 @@ initialize() {
 	// then the values of the default parameters will be overridden with the values sepcified
 	defaults = Dictionary(
 		"SEED", getSeed(), // random seed
-		"RUNVARS_FILE", 'testing_example/slim_output/slim_parameters/run1/RunVars_slim.csv', // File containing run info
+		"RUNVARS_FILE", 'climate_testing_example/slim_output/slim_parameters/run1/RunVars_slim.csv', // File containing run info
 		"PARAM_FOLDER", "./", // Folder containing parameter files
-		"IND_OUT_FOLDER", "testing_example/slimgui_testing/", // Folder for individual output
-		"ALLPOPS_OUT", "testing_example/slimgui_testing/summary_popAllTime.csv",
-		"BYCLASS", "testing_example/slimgui_testing/summary_classAllTime.csv",
-		"FINISHED", "testing_example/slimgui_testing/finished.txt",
+		"IND_OUT_FOLDER", "climate_testing_example/slimgui_testing/", // Folder for individual output
+		"ALLPOPS_OUT", "climate_testing_example/slimgui_testing/summary_popAllTime.csv",
+		"BYCLASS", "climate_testing_example/slimgui_testing/summary_classAllTime.csv",
+		"FINISHED", "climate_testing_example/slimgui_testing/finished.txt",
 		"SCALEPOPSIZE", 1, // Decrease carrying capacities for testing
 		"NPATCHES", 'all' // Decrease number of patches for testing
 	);
@@ -198,6 +198,8 @@ CHANGE_YEARS first(){
 		popvars_current = POPVARS_ALL.subsetRows(POPVARS_ALL.getValue("year") == community.tick);
 		defineGlobal("POPVARS", popvars_current);
 		setupGlobalsFromPopVars(POPVARS);
+		// PatchVars
+		defineGlobal("PATCHVARS", PATCHVARS_ALL.subsetRows(PATCHVARS_ALL.getValue('year') == community.tick));
 	}
 }
 
@@ -832,7 +834,12 @@ function (void)setupParams(object<Dictionary>$ defaults)
 function (void)setupConstantsFromPopVars(object<Dictionary>$ popvars)
 { 
 	// Read in patch info and set up patch ids
-	defineConstant("PATCHVARS", readCSV(PARAM_FOLDER + popvars.getValue("xyfilename")[0]));
+	// If climate change is implemented, some variables in PatchVars can change over time
+	// So, if climate change is implemented, set up using the the first year of PatchVars
+	defineConstant("PATCHVARS_ALL", readCSV(PARAM_FOLDER + popvars.getValue("xyfilename")[0]));
+	if(!isNULL(PATCHVARS_ALL.getValue("year"))) defineGlobal("PATCHVARS", PATCHVARS_ALL.subsetRows(PATCHVARS_ALL.getValue('year') == 1));
+	else defineGlobal("PATCHVARS", PATCHVARS_ALL);
+	
 	patchids = (1:length(PATCHVARS.getValue("PatchID")))-1;
 	patchks = PATCHVARS.getValue("K")*SCALEPOPSIZE;
 	patchstdevs = PATCHVARS.getValue("K StDev")*SCALEPOPSIZE;
@@ -875,6 +882,7 @@ function (void)setupConstantsFromPopVars(object<Dictionary>$ popvars)
 }
 
 function (void)setupGlobalsFromPopVars(object<Dictionary>$ popvars){
+	
 	// Classvars
 	defineGlobal("CLASSVARS",readCSV(PARAM_FOLDER + PATCHVARS.getValue("classvars")[0]));
 	
@@ -903,20 +911,20 @@ function (void)setupGlobalsFromPopVars(object<Dictionary>$ popvars){
 	mgrounds = PATCHVARS.getValue("Migration Grounds");
 	migration_matrix[,mgrounds == 0] = 0; // Can't migrate to non-migration grounds
 	if (NPATCHES != "all"){migration_matrix = migration_matrix[PATCHIDS,PATCHIDS];}
-	defineGlobal("MIGRATIONOUT", migration_matrix);
+	defineGlobal("MIGRATIONOUT", asFloat(migration_matrix));
 	
 	// Straying matrix
 	stray_matrix = readCSV(popvars.getValue('stray_cdmat'), colNames = asString(PATCHIDS)).asMatrix();
 	ngrounds = PATCHVARS.getValue("Natal Grounds");
 	stray_matrix[,ngrounds == 0] = 0; // Can't stray to non-natal grounds
 	if (NPATCHES != "all"){stray_matrix = stray_matrix[PATCHIDS,PATCHIDS];}
-	defineGlobal("STRAYMATRIX", stray_matrix);
+	defineGlobal("STRAYMATRIX", asFloat(stray_matrix));
 	
 	// Migration back matrix
 	migration_matrix = readCSV(popvars.getValue('migrateback_cdmat'), colNames = asString(PATCHIDS)).asMatrix();
 	migration_matrix[,ngrounds == 0] = 0; // Can't migrate back to non-natal grounds
 	if (NPATCHES != "all"){migration_matrix = migration_matrix[PATCHIDS,PATCHIDS];}
-	defineGlobal("MIGRATIONBACK", migration_matrix);
+	defineGlobal("MIGRATIONBACK", asFloat(migration_matrix));
 	
 	// Probability of migrating back to natal patch from each other patch
 	// Natal to emigrated: MIGRATIONOUT, natal patch is row, emigrated patch is column
@@ -936,7 +944,7 @@ function (void)setupGlobalsFromPopVars(object<Dictionary>$ popvars){
 	// Dispersal matrix
 	dispersal_matrix = readCSV(popvars.getValue('disperse_cdmat'), colNames = asString(PATCHIDS));
 	if (NPATCHES != "all"){dispersal_matrix = dispersal_matrix.subsetColumns(PATCHIDS).subsetRows(PATCHIDS);}
-	defineGlobal("DISPERSELOCAL", dispersal_matrix.asMatrix());
+	defineGlobal("DISPERSELOCAL", asFloat(dispersal_matrix.asMatrix()));
 	
 	// Mutation rate
 	defineGlobal("MUTRATE", popvars.getValue("muterate"));

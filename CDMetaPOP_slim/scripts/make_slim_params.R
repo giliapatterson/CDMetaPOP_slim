@@ -16,28 +16,28 @@ thisFile <- function() {
 }
 script_directory <- dirname(thisFile())
 
+#source("file_processing_functions.r")
 source(paste0(script_directory,"/file_processing_functions.r"))
-# source("file_processing_functions.r")
 parser <- ArgumentParser()
 
 parser$add_argument(
     "-d",
     "--parameter_directory",
-    default = '../../../trout-and-frogs/trout_sim/trout_sim_parameters/',
+    default = '../../example_runs/climate_testing_example/',
     help = "Directory containing CDMetaPOP input files"
 )
 
 parser$add_argument(
     "-r",
     "--runvars_file_name",
-    default = '../../../trout-and-frogs/trout_sim/trout_sim_parameters/RunVars.csv',
+    default = '../../example_runs/climate_testing_example/RunVars.csv',
     help = "Name of RunVars file for CDMetaPOP"
 )
 
 parser$add_argument(
     "-o",
     "--output_directory",
-    default = '../../../trout-and-frogs/trout_sim/trout_sim_parameters/slim_test_params/',
+    default = '../../example_runs/climate_testing_example/slim_test_params/',
     help = "Directory for SLiM input files"
 )
 
@@ -52,29 +52,37 @@ nruns <- nrow(runvars_all)
 
 for(run in 1:nruns){
   print(glue('Processing run {run} of {nruns}'))
+  # Slice run 1
   runvars <- runvars_all |> slice(run)
-  output_directory = paste0(output_overall, "run", run, "/") # Directory to output SLiM parameter files
-  dir.create(file.path(output_directory), showWarnings = FALSE) # Create output directory if it doesn't already exist
-
+  
+  # Directory to output SLiM parameter files
+  output_directory = paste0(output_overall, "run", run, "/")
+  # Create output directory if it doesn't already exist
+  dir.create(file.path(output_directory), showWarnings = FALSE)
+  
+  #Add 1 to variables containing years to be consistent with SLiM
+  runvars <- mutate(runvars,
+                    cdclimgentime = add_one(as.character(cdclimgentime)))
+  if(grepl("|", runvars$output_years, fixed = TRUE)){
+    runvars <- mutate(runvars, output_years = add_one(as.character(output_years)))
+  }
+  
   # Does this run change the climate?
-  climchangeyears <- as.numeric(str_split_1(as.character(pull(runvars, cdclimgentime)), fixed("|"))) + 1
+  climchangeyears <- as.numeric(str_split_1(as.character(pull(runvars, cdclimgentime)), fixed("|"))) 
   climate_change <- length(climchangeyears) > 1
   
-  # SLiM code doesn't currently support all options of CDMetaPOP
-  # Extract the options used by SLiM and add 1 to variables containing years to be consistent with SLiM
-  add_one <- function(year_string){
-    return(paste(as.numeric(str_split_1(year_string, fixed("|"))) + 1, collapse = "|"))
-  }
-  runvars <- mutate(runvars, output_years = add_one(as.character(output_years)),
-                    cdclimgentime = add_one(as.character(cdclimgentime)))
+  # Check output format
   if(runvars$gridformat != 'genalex'){
     print(glue("gridformat {runvars$gridformat} is not supported. Using 'genalex' grid format."))
   }
-
+  
+  # SLiM code doesn't currently support all options of CDMetaPOP
+  # Extract the options used by SLiM
   if(climate_change){runvars_used <- c("Popvars", "sizecontrol","runtime", "output_years", "cdclimgentime")}
   if(!climate_change){runvars_used <- c("Popvars", "sizecontrol", "runtime", "output_years")}
   runvars <- select(runvars, all_of(runvars_used))
   
+  #### POPVARS ######
   # Change entry for Popvars to match the Popvars file used for SLiM
   popvars_file_out <- paste0(output_directory, "PopVars_slim.csv")
   runvars_out <- runvars |>
@@ -86,7 +94,7 @@ for(run in 1:nruns){
   
   ### Process PopVars ###
   # Read in CDMetaPOP popvars
-  popvars <- read_csv(paste0(param_directory, pull(runvars, Popvars)), show_col_types = FALSE)
+  popvars <- read_csv(paste0(param_directory, pull(runvars, Popvars)), show_col_types = FALSE) 
   
   ## 1. Process patchvars ##
   # Read in CDMetaPOP patchvars
@@ -109,7 +117,6 @@ for(run in 1:nruns){
     print(glue("Option random_var not supported for initializing genes, using random instead."))
     genes_method = "random"
   }
-  
   if (length(unique(genes_initialize)) > 1 | !(genes_initialize[1] %in% c("random", "random_var"))){
     print(glue("Using gene initialization from file."))
     genes_method = "file"
@@ -171,8 +178,12 @@ for(run in 1:nruns){
   # Update file in patchvars
   patchvars <- mutate(patchvars, classvars = classvars_out_file)
   
+  ## Split patchvars by climate
+  patchvars <- patchvars |> mutate(year = paste(climchangeyears, collapse = "|")) |>
+                                     separate_longer_delim(everything(), "|")
+  
   ## 1. (c) Remove variables that aren't used by SLiM and write to file ##
-  patchvars_used <- c("PatchID", "X", "Y", "K", "K StDev", "N0", "Mortality Eggs",
+  patchvars_used <- c("year", "PatchID", "X", "Y", "K", "K StDev", "N0", "Mortality Eggs",
                       "Migration Out Prob", "Migration Back Prob", "Straying Prob",
                       "Dispersal Prob", "GrowthTemperatureOut", "GrowthTemperatureOutStDev",
                       "GrowDaysOut", "GrowDaysOutStDev", "GrowthTemperatureBack", "GrowthTemperatureBackStDev",
@@ -190,30 +201,21 @@ for(run in 1:nruns){
   ## 2. Process matrices ##
   # If the climate changes over time, popvars has multiple rows, one for each
   # time step
-  if(climate_change){
-    # Make popvars multiple rows
-    popvars_new <- bind_rows(rep(list(popvars), length(climchangeyears))) |>
-      mutate(year = climchangeyears)
-    # Split file names
-    popvars_new <- popvars_new |> mutate(
-                       mate_cdmat_old = str_split_1(popvars$mate_cdmat[1], fixed("|")),
-                       migrateout_cdmat_old = str_split_1(popvars$migrateout_cdmat[1], fixed("|")),
-                       migrateback_cdmat_old = str_split_1(popvars$migrateback_cdmat[1], fixed("|")),
-                       stray_cdmat_old = str_split_1(popvars$stray_cdmat[1], fixed("|")),
-                       disperse_cdmat_old = str_split_1(popvars$disperseLocal_cdmat[1], fixed("|")))
+  # Separate popvars by year
+  popvars <- popvars |> separate_longer_delim(everything(), delim = "|")
+  if(nrow(popvars) != length(climchangeyears)){
+    print(glue("Error: not enough values specified for CDClimGen"))
   }
-  if(!climate_change){
-    popvars_new <- popvars |> mutate(mate_cdmat_old = mate_cdmat,
-                                     migrateout_cdmat_old = migrateout_cdmat,
-                                     migrateback_cdmat_old = migrateback_cdmat,
-                                     stray_cdmat_old = stray_cdmat,
-                                     disperse_cdmat_old = disperseLocal_cdmat)
-  }
+  if(climate_change){popvars <- mutate(popvars, year = climchangeyears)}
   
-  # Make new file names
+  ## Process matrices
   cdmat_dir = paste0(output_directory,"cdmats")
   dir.create(file.path(cdmat_dir), showWarnings = FALSE) # Create output directory if it doesn't already exist
-  
+  popvars_new <- mutate(popvars, mate_cdmat_old = mate_cdmat,
+                        migrateout_cdmat_old = migrateout_cdmat,
+                        migrateback_cdmat_old = migrateback_cdmat,
+                        stray_cdmat_old = stray_cdmat,
+                        disperse_cdmat_old = disperseLocal_cdmat)
   popvars_new <- popvars_new |> mutate(mate_cdmat = new_file_name(cdmat_dir, mate_cdmat_old),
                                        migrateout_cdmat = new_file_name(cdmat_dir, migrateout_cdmat_old),
                                        migrateback_cdmat = new_file_name(cdmat_dir, migrateback_cdmat_old),
@@ -234,21 +236,23 @@ for(run in 1:nruns){
   }
   
   ## 3. Process remaining variables ##
-  popvars_new  = mutate(popvars_new, mature_eqn_slope_f = str_split_1(popvars_new$mature_eqn_slope[1], "~")[1],
-                    mature_eqn_slope_m = str_split_1(popvars$mature_eqn_slope[1], "~")[2],
-                    mature_eqn_int_f = str_split_1(popvars$mature_eqn_int[1], "~")[1],
-                    mature_eqn_int_m = str_split_1(popvars$mature_eqn_int[1], "~")[2],
+  popvars_new  = mutate(popvars_new, mature_eqn_slope_f = str_split_i(mature_eqn_slope, "~", 1),
+                    mature_eqn_slope_m = str_split_i(mature_eqn_slope, "~", 2),
+                    mature_eqn_int_f = str_split_i(mature_eqn_int, "~", 1),
+                    mature_eqn_int_m = str_split_i(mature_eqn_int, "~", 2),
                     mature_age = gsub("age", "", mature_default))
-  if(grep("~", popvars_new$mature_age)){
-    popvars_new$mature_age_f = str_split_1(popvars_new$mature_age, "~")[1]
-    popvars_new$mature_age_m = str_split_1(popvars_new$mature_age, "~")[2]
+  if(grep("~", popvars_new$mature_age[1])){
+    popvars_new <- mutate(popvars_new,
+                          mature_age_f = str_split_i(mature_age, "~", 1),
+                          mature_age_m = str_split_i(mature_age, "~", 1))
   }
   else{
-    popvars_new$mature_age_f = popvars_new$mature_age
-    popvars_new$mature_age_m = popvars_new$mature_age
+    popvars_new <- mutate(popvars_new,
+                          mature_age_f = mature_age,
+                          mature_age_m = mature_age)
   }
   ## 4. Remove unused variables and write to file
-  if(popvars$mutationtype != 'random'){
+  if(popvars$mutationtype[1] != 'random'){
     print(glue("Mutation type {popvars$mutationtype} not supported, using 'random'"))
   }
   if(runvars$sizecontrol == 'Y'){
@@ -269,16 +273,15 @@ for(run in 1:nruns){
   }
   # For gene initialization method "random", check that number of alleles is a single number
   if(genes_method == "random"){
-    
-    if(!is.numeric(popvars_new$alleles)){
-      popvars_new$alleles = as.numeric(str_split_1(popvars_new$alleles, fixed(":")))[1]
+    if(grepl(":",popvars_new$alleles[1])){
+      popvars_new$alleles = as.numeric(str_split_1(popvars_new$alleles[1], fixed(":")))[1]
       print(glue("Specifying different numbers of alleles for each locus is unsupported.",
             "Using {popvars_new$alleles} alleles per locus."))
     }
     popvars_used = c(popvars_used, "alleles")
   }
   if(climate_change){popvars_used = c("year", popvars_used)}
-  popvars_out <- select(popvars_new, all_of(popvars_used)) |> mutate(startGenes = startGenes + 1)
+  popvars_out <- select(popvars_new, all_of(popvars_used)) |> mutate(startGenes = as.numeric(startGenes) + 1)
   write_csv(popvars_out, popvars_file_out)
   print(glue('Processing run {run} of {nruns} finished'))
 }
