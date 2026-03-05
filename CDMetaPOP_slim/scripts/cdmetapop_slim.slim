@@ -206,6 +206,12 @@ CHANGE_YEARS first(){
 first(){
 	// Update Ks
 	defineGlobal("PATCHKS", rnorm(length(PATCHVARS.getValue('K')[PATCHIDS]), PATCHVARS.getValue('K')[PATCHIDS]*SCALEPOPSIZE, PATCHVARS.getValue('K StDev')[PATCHIDS]*SCALEPOPSIZE));
+	// Update temperatures
+	defineGlobal("GrowthTemperatureOut", rnorm(length(PATCHIDS), PATCHVARS.getValue('GrowthTemperatureOut')[PATCHIDS], PATCHVARS.getValue("GrowthTemperatureOutStDev")[PATCHIDS]));
+	defineGlobal("GrowthTemperatureBack", rnorm(length(PATCHIDS), PATCHVARS.getValue('GrowthTemperatureBack')[PATCHIDS], PATCHVARS.getValue("GrowthTemperatureBackStDev")[PATCHIDS]));
+	// Update grow days
+	defineGlobal("GrowDaysOut", asInteger(round(rnorm(length(PATCHIDS), PATCHVARS.getValue('GrowDaysOut')[PATCHIDS], PATCHVARS.getValue("GrowDaysOutStDev")[PATCHIDS]))));
+	defineGlobal("GrowDaysBack", asInteger(round(rnorm(length(PATCHIDS), PATCHVARS.getValue('GrowDaysBack')[PATCHIDS], PATCHVARS.getValue("GrowDaysBackStDev")[PATCHIDS]))));
 	
 	defineGlobal("N_INITIAL", sim.subpopulations.individualCount);
 	ages = CLASSVARS.getValue("Age class");
@@ -606,12 +612,12 @@ function (void)grow(string step){
 	current_sizes = all_ind.getValue("size");
 	age_classes = age_class(all_ind, method = "age");
 	if (step == 'out'){
-		patch_temperatures = rnorm(length(all_ind), PATCHVARS.getValue("GrowthTemperatureOut")[patchids], 		PATCHVARS.getValue("GrowthTemperatureOutStDev")[patchids]);
-		grow_days = asInteger(round(rnorm(length(all_ind), PATCHVARS.getValue("GrowDaysOut")[patchids], 	PATCHVARS.getValue("GrowDaysOutStDev")[patchids])));
+		patch_temperatures = GrowthTemperatureOut[patchids];
+		grow_days = GrowDaysOut[patchids];
 	}
 	if (step == 'back'){
-		patch_temperatures = rnorm(length(all_ind), PATCHVARS.getValue("GrowthTemperatureBack")[patchids], 		PATCHVARS.getValue("GrowthTemperatureBackStDev")[patchids]);
-		grow_days = asInteger(round(rnorm(length(all_ind), PATCHVARS.getValue("GrowDaysBack")[patchids], 	PATCHVARS.getValue("GrowDaysBackStDev")[patchids])));
+		patch_temperatures = GrowthTemperatureBack[patchids];
+		grow_days = GrowDaysBack[patchids];
 	}
 	all_ind.setValuesVectorized("size", grow_temperature(current_sizes, age_classes, patch_temperatures, grow_days));
 	return;
