@@ -199,12 +199,16 @@ for(run in 1:nruns){
   popvars <- popvars |> mutate(xyfilename = patchvars_file_out)
   
   ## 2. Process matrices ##
-  # If the climate changes over time, popvars has multiple rows, one for each
+  # If the climate changes over time, popvars can have multiple rows, one for each
   # time step
   # Separate popvars by year
   popvars <- popvars |> separate_longer_delim(everything(), delim = "|")
-  if(nrow(popvars) != length(climchangeyears)){
+  # If none of the variables in popvars change over time, replicate rows
+  if(climate_change & nrow(popvars) == 1){popvars <- popvars |> slice(rep(1, length(climchangeyears)))}
+  if(nrow(popvars) > 1 & nrow(popvars) != length(climchangeyears)){
     print(glue("Error: not enough values specified for CDClimGen"))
+    print(glue("{length(climchangeyears)} values needed for at least one variable in PopVars"))
+    print(glue("Only {nrow(popvars)} specified"))
   }
   if(climate_change){popvars <- mutate(popvars, year = climchangeyears)}
   
@@ -270,6 +274,11 @@ for(run in 1:nruns){
                       "Egg_Mortality", "offno", "loci", "mature_age_f", "mature_age_m",
                       "popmodel_par1",
                       "popmodel", "startGenes", "muterate")
+  }
+  # Is there a QTL?
+  if(has_name(popvars, "genome_length")){
+    popvars_used <- c(popvars_used, "genome_length", "qtl_prop_genome", "qtl_pheno_eff", "qtl_env_variable",
+                      "qtl_muterate", "qtl_recrate", "qtl_ve", "qtl_fit_sd")
   }
   # For gene initialization method "random", check that number of alleles is a single number
   if(genes_method == "random"){

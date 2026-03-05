@@ -8,12 +8,12 @@ initialize() {
 	// then the values of the default parameters will be overridden with the values sepcified
 	defaults = Dictionary(
 		"SEED", getSeed(), // random seed
-		"RUNVARS_FILE", 'climate_testing_example/slim_output/slim_parameters/run1/RunVars_slim.csv', // File containing run info
+		"RUNVARS_FILE", 'climate_change_McKenzie/slim_output/slim_parameters/run1/RunVars_slim.csv', // File containing run info
 		"PARAM_FOLDER", "./", // Folder containing parameter files
-		"IND_OUT_FOLDER", "climate_testing_example/slimgui_testing/", // Folder for individual output
-		"ALLPOPS_OUT", "climate_testing_example/slimgui_testing/summary_popAllTime.csv",
-		"BYCLASS", "climate_testing_example/slimgui_testing/summary_classAllTime.csv",
-		"FINISHED", "climate_testing_example/slimgui_testing/finished.txt",
+		"IND_OUT_FOLDER", "climate_change_McKenzie/slimgui_testing/", // Folder for individual output
+		"ALLPOPS_OUT", "climate_change_McKenzie/slimgui_testing/summary_popAllTime.csv",
+		"BYCLASS", "climate_change_McKenzie/slimgui_testing/summary_classAllTime.csv",
+		"FINISHED", "climate_change_McKenzie/slimgui_testing/finished.txt",
 		"SCALEPOPSIZE", 1, // Decrease carrying capacities for testing
 		"NPATCHES", 'all' // Decrease number of patches for testing
 	);
@@ -62,16 +62,52 @@ initialize() {
 		defineConstant("CLIMATECHANGE", F);
 	}
 	
+	// Is a QTL implemented?
+	if(!isNULL(POPVARS_ALL.getValue("genome_length"))) defineConstant("QTL", T); else defineConstant("QTL", F);
+	
 	// Output
 	writeSubpopOutput(ALLPOPS_OUT, header = T);	
 	writeClassOutput(BYCLASS, header = T);
 	
 	// Set up genome
-	initializeMutationType("m1", 0.5, "f", 0.0);
-	initializeGenomicElementType("g1", m1, 1.0);
-	initializeGenomicElement(g1, 0, NLOCI - 1);
-	initializeMutationRate(0);
-	initializeRecombinationRate(0.5);
+	// Genomic element g1 is neutral loci set up like the original CDMetaPOP
+	// Genomic element g2 is for quantitative trait
+	// Both are optional
+	if(NLOCI == 0 & QTL){
+		// Mutation linked to quantitative trait
+		initializeMutationType("m2", 0.5, "s", QTL_PHENO_EFF);
+		// Neutral mutations
+		initializeMutationType("m3", 0.5, "f", 0.0);
+		initializeGenomicElementType("g2", c(m2, m3), c(1.0 - QTL_PROP_GENOME, QTL_PROP_GENOME));
+		initializeGenomicElement(g2, 0, QTL_GEN_LENGTH - 1);
+		// Mutation rates and recombination rates
+		initializeMutationRate(QTL_MUTERATE);
+		initializeRecombinationRate(QTL_RECRATE);
+		m2.convertToSubstitution = F;
+	}
+	if(NLOCI > 0 & QTL){
+		// Original CDMetaPOP loci
+		initializeMutationType("m1", 0.5, "f", 0.0);
+		initializeGenomicElementType("g1", m1, 1.0);
+		initializeGenomicElement(g1, 0, NLOCI - 1);
+		// Mutation linked to quantitative trait
+		initializeMutationType("m2", 0.5, "s", QTL_PHENO_EFF);
+		initializeGenomicElementType("g2", m2, 1.0);
+		initializeGenomicElement(g2, NLOCI, NLOCI - 1 + QTL_GEN_LENGTH);
+		// Mutation rates and recombination rates
+		initializeMutationRate(c(0, QTL_MUTERATE), c(NLOCI -1, NLOCI + QTL_GEN_LENGTH - 1));
+		initializeRecombinationRate(c(0.5, QTL_RECRATE), c(NLOCI -1, NLOCI + QTL_GEN_LENGTH - 1));
+		m1.convertToSubstitution = F;
+		m2.convertToSubstitution = F;
+	}
+	if(NLOCI > 0 & !QTL){
+		initializeMutationType("m1", 0.5, "f", 0.0);
+		initializeGenomicElementType("g1", m1, 1.0);
+		initializeGenomicElement(g1, 0, NLOCI - 1);
+		initializeMutationRate(c(0), c(NLOCI-1));
+		initializeRecombinationRate(0.5);
+		m1.convertToSubstitution = F;
+	}
 
 }
 
@@ -100,32 +136,72 @@ first(){
 }
 
 STARTGENES first(){
-	print("Setting up genes");
-	if(!isNULL(GENEFILES)){
-		// Set up genes in patches
-		for (patch in sim.subpopulations){
-			// Add genes
-			gene_freqs = readCSV(GENEFILES[patch.id]);
+	if(NLOCI > 0){
+		print("Setting up genes");
+		if(!isNULL(GENEFILES)){
+			// Set up genes in patches
+			for (patch in sim.subpopulations){
+				// Add genes
+				gene_freqs = readCSV(GENEFILES[patch.id]);
+				positions = 0:(NLOCI-1);
+				// All genomes in the patch
+				genomes = patch.haplosomes;
+				ngenomes = length(genomes);
+				// Loop through all loci
+				all_loci = unique(gene_freqs.getValue('position'));
+				// Keep track of number of alleles for each locus
+				alleles_per_locus = integer(length(all_loci));
+				// Keep track of alleles for each locus
+				alleles_per_locus_vals = Dictionary();
+				for (locus_index in all_loci){
+					locus = all_loci[locus_index];
+					// Get alleles for the locus
+					locus_df = gene_freqs.subsetRows(gene_freqs.getValue('position') == locus);
+					freqs = locus_df.getValue('Frequency');
+					alleles = locus_df.getValue('allele');
+					alleles_per_locus[locus_index] = length(alleles);
+					alleles_per_locus_vals.setValue(locus_index, alleles);
+					// Select alleles for each genome
+					genome_alleles = sample(alleles, ngenomes, replace = T, weights = freqs);
+					// assign alleles counts to genomes
+					for (allele_val in alleles){
+						// Find genomes with each count
+						genome_subset = genomes[genome_alleles == allele_val];
+						if(genome_subset.size()){
+							// Is this a new mutation?
+							all_alleles = sim.mutationsOfType(m1);
+							allelesAtSite = all_alleles[all_alleles.position == locus];
+							matchingMut = allelesAtSite[allelesAtSite.tag == allele_val];
+							// If not, add old mutation
+							if (matchingMut.size() == 1){
+								genome_subset.addMutations(matchingMut);
+							}
+							// If yes, create new mutation
+							else{
+								mut = genome_subset.addNewDrawnMutation(m1, locus);
+								mut.tag = allele_val;
+							}
+						}
+					}
+				}
+			}
+		}
+		else{
+			// Add alleles randomly
 			positions = 0:(NLOCI-1);
-			// All genomes in the patch
-			genomes = patch.haplosomes;
+			alleles = 0:(NALLELES - 1);
+			// All genomes
+			genomes = sim.subpopulations.haplosomes;
 			ngenomes = length(genomes);
-			// Loop through all loci
-			all_loci = unique(gene_freqs.getValue('position'));
-			// Keep track of number of alleles for each locus
-			alleles_per_locus = integer(length(all_loci));
+			// Record number of alleles for each locus
+			alleles_per_locus = integer(length(positions), fill1 = length(alleles));
 			// Keep track of alleles for each locus
 			alleles_per_locus_vals = Dictionary();
-			for (locus_index in all_loci){
-				locus = all_loci[locus_index];
+			for (locus in positions){
+				alleles_per_locus_vals.setValue(locus, alleles);
 				// Get alleles for the locus
-				locus_df = gene_freqs.subsetRows(gene_freqs.getValue('position') == locus);
-				freqs = locus_df.getValue('Frequency');
-				alleles = locus_df.getValue('allele');
-				alleles_per_locus[locus_index] = length(alleles);
-				alleles_per_locus_vals.setValue(locus_index, alleles);
 				// Select alleles for each genome
-				genome_alleles = sample(alleles, ngenomes, replace = T, weights = freqs);
+				genome_alleles = sample(alleles, ngenomes, replace = T);
 				// assign alleles counts to genomes
 				for (allele_val in alleles){
 					// Find genomes with each count
@@ -148,58 +224,29 @@ STARTGENES first(){
 				}
 			}
 		}
-	}
-	else{
-		// Add alleles randomly
-		positions = 0:(NLOCI-1);
-		alleles = 0:(NALLELES - 1);
-		// All genomes
-		genomes = sim.subpopulations.haplosomes;
-		ngenomes = length(genomes);
-		// Record number of alleles for each locus
-		alleles_per_locus = integer(length(positions), fill1 = length(alleles));
-		// Keep track of alleles for each locus
-		alleles_per_locus_vals = Dictionary();
-		for (locus in positions){
-			alleles_per_locus_vals.setValue(locus, alleles);
-			// Get alleles for the locus
-			// Select alleles for each genome
-			genome_alleles = sample(alleles, ngenomes, replace = T);
-			// assign alleles counts to genomes
-			for (allele_val in alleles){
-				// Find genomes with each count
-				genome_subset = genomes[genome_alleles == allele_val];
-				if(genome_subset.size()){
-					// Is this a new mutation?
-					all_alleles = sim.mutationsOfType(m1);
-					allelesAtSite = all_alleles[all_alleles.position == locus];
-					matchingMut = allelesAtSite[allelesAtSite.tag == allele_val];
-					// If not, add old mutation
-					if (matchingMut.size() == 1){
-						genome_subset.addMutations(matchingMut);
-					}
-					// If yes, create new mutation
-					else{
-						mut = genome_subset.addNewDrawnMutation(m1, locus);
-						mut.tag = allele_val;
-					}
-				}
-			}
-		}
-	}
-	defineConstant("ALLELES_PER_LOCUS", alleles_per_locus);
-	defineConstant("ALLELES_PER_LOCUS_VALS", alleles_per_locus_vals);
-	
+		defineConstant("ALLELES_PER_LOCUS", alleles_per_locus);
+		defineConstant("ALLELES_PER_LOCUS_VALS", alleles_per_locus_vals);
+	}	
 }
 
 CHANGE_YEARS first(){
 	if(CLIMATECHANGE){
 		print("Updating params that change with time");
+		// PatchVars
+		defineGlobal("PATCHVARS", PATCHVARS_ALL.subsetRows(PATCHVARS_ALL.getValue('year') == community.tick));
 		popvars_current = POPVARS_ALL.subsetRows(POPVARS_ALL.getValue("year") == community.tick);
 		defineGlobal("POPVARS", popvars_current);
 		setupGlobalsFromPopVars(POPVARS);
-		// PatchVars
-		defineGlobal("PATCHVARS", PATCHVARS_ALL.subsetRows(PATCHVARS_ALL.getValue('year') == community.tick));
+		// Change QTL genome parameters
+		
+		if(NLOCI == 0 & QTL){
+			sim.chromosome.setMutationRate(QTL_MUTERATE);
+			sim.chromosome.setRecombinationRate(QTL_RECRATE);
+		}
+		if(NLOCI > 0 & QTL){
+			sim.chromosome.setMutationRate(c(0, QTL_MUTERATE), c(NLOCI -1, NLOCI + QTL_GEN_LENGTH - 1));
+			sim.chromosome.setRecombinationRate(c(0.5, QTL_RECRATE), c(NLOCI -1, NLOCI + QTL_GEN_LENGTH - 1));
+		}
 	}
 }
 
@@ -281,7 +328,7 @@ modifyChild(p1) {
 		if(MUTRATE * NLOCI > 0) mutCount = rpois(1, MUTRATE * NLOCI);
 		else mutCount = 0;
 		if (mutCount){
-			print("Mutation count!");
+			//print("Mutation count!");
 			mutSites = sample(0:(NLOCI-1), mutCount);
 			ind_mutations = genome.mutationsOfType(m1);
 			for (mutSite in mutSites){
@@ -347,6 +394,8 @@ early(){
 }
 
 mutationEffect(m1) { return 1.0; }
+mutationEffect(m2) { return 1.0; }
+
 
 OUTPUT_TICKS late(){
 	
@@ -475,6 +524,27 @@ late(){
 		}
 	}
 	for (dest in unique(destinations)){dest.takeMigrants(dispersers[destinations == dest]);}
+}
+
+late() {
+	// QTL selection
+	if(QTL){
+		print("QTL selection back");
+		inds = sim.subpopulations.individuals;
+		phenotypes = inds.sumOfMutationsOfType(m2) + rnorm(length(inds), mean = 0, sd = sqrt(QTL_VE)) + QTL_BASELINE;
+		inds.setValuesVectorized("phenotype", phenotypes);
+		patches = inds.subpopulation.id;
+		// Get current values of environmental variables
+		optimums = executeLambda(QTL_ENV_VARIABLE + ";");
+		deviations = optimums[patches] - phenotypes;
+		fitnessFunctionMax = dnorm(0.0, 0.0, QTL_FIT_SD);
+		psurvive = dnorm(deviations, 0.0, QTL_FIT_SD)/fitnessFunctionMax;
+		kill = inds[runif(length(inds)) > psurvive];
+		print(length(kill) + " individuals killed");
+		sim.killIndividuals(kill);
+		//print(GrowthTemperatureBack);
+		//print(sapply(sim.subpopulations, "mean(applyValue.individuals.getValue('phenotype'));"));
+	}
 }
 
 late() {
@@ -885,6 +955,13 @@ function (void)setupConstantsFromPopVars(object<Dictionary>$ popvars)
 		defineConstant("NALLELES", popvars.getValue("alleles")[0]);
 	}
 	//print(NLOCI);
+	
+	// Set up QTL
+	defineConstant("QTL_GEN_LENGTH", popvars.getValue('genome_length'));
+	defineConstant("QTL_PROP_GENOME", popvars.getValue('prop_genome'));
+	defineConstant("QTL_PHENO_EFF", popvars.getValue('qtl_pheno_eff') + ";");
+	defineConstant("QTL_ENV_VARIABLE", popvars.getValue('qtl_env_variable'));
+	defineConstant("QTL_BASELINE", mean(PATCHVARS.getValue(QTL_ENV_VARIABLE)));
 }
 
 function (void)setupGlobalsFromPopVars(object<Dictionary>$ popvars){
@@ -954,6 +1031,12 @@ function (void)setupGlobalsFromPopVars(object<Dictionary>$ popvars){
 	
 	// Mutation rate
 	defineGlobal("MUTRATE", popvars.getValue("muterate"));
+	
+	// QTL parameters
+	defineGlobal("QTL_MUTERATE", popvars.getValue("qtl_muterate"));
+	defineGlobal("QTL_RECRATE", popvars.getValue("qtl_recrate"));
+	defineGlobal("QTL_VE", popvars.getValue("qtl_ve"));
+	defineGlobal("QTL_FIT_SD", popvars.getValue("qtl_fit_sd"));
 
 }
 
@@ -982,17 +1065,17 @@ function (void)writeSubpopOutput(string outfile, logical header){
 	PackingDeaths_Immigration = paste(c(sum(DEATHS2), DEATHS2), sep = "|");
 	N_Emigration = paste(c(sum(N2), N2), sep = "|");
 	// helper variables
-	if(length(community.allMutationTypes) > 0){
+	if(NLOCI > 0){
 		nalleles_total = length(unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(m1)));
 		nalleles = sapply(sim.subpopulations, "length(unique(applyValue.individuals.haplosomes.mutationsOfType(m1)));");
-		He_total = calcHeterozygosity(sim.subpopulations.individuals.haplosomes);
-		Ho_total = mean(sapply(sim.subpopulations.individuals, "calcPairHeterozygosity(applyValue.haplosomes[0], applyValue.haplosomes[1], infiniteSites=F);"));
+		He_total = calcHeterozygosity(sim.subpopulations.individuals.haplosomes, sim.subpopulations.individuals.haplosomes.mutationsOfType(m1));
+		Ho_total = mean(sapply(sim.subpopulations.individuals, "calcPairHeterozygosity(applyValue.haplosomes[0], applyValue.haplosomes[1], start = 0, end = NLOCI - 1, infiniteSites=F);"));
 		He_subpops = float(length(sim.subpopulations));
 		Ho_subpops = float(length(sim.subpopulations));
 		for (subpop in sim.subpopulations){
 			if (subpop.individualCount > 0){
-				He_subpops[subpop.id] = calcHeterozygosity(subpop.individuals.haplosomes);
-				Ho_subpops[subpop.id] = mean(sapply(subpop.individuals, "calcPairHeterozygosity(applyValue.haplosomes[0], applyValue.haplosomes[1], infiniteSites=F);"));
+				He_subpops[subpop.id] = calcHeterozygosity(subpop.individuals.haplosomes, subpop.individuals.haplosomes.mutationsOfType(m1));
+				Ho_subpops[subpop.id] = mean(sapply(subpop.individuals, "calcPairHeterozygosity(applyValue.haplosomes[0], applyValue.haplosomes[1], start = 0, end = NLOCI - 1, infiniteSites=F);"));
 			}
 			else{
 				He_subpops[subpop.id] = -1;	
@@ -1000,7 +1083,7 @@ function (void)writeSubpopOutput(string outfile, logical header){
 			}
 		}
 	}
-	if(length(community.allMutationTypes) == 0){
+	if(NLOCI == 0){
 		nalleles_total = -1;
 		nalleles = sapply(sim.subpopulations, "-1;");
 		He_total = -1;
@@ -1073,10 +1156,15 @@ function (void)writeClassOutput(string outfile, logical header){
 }
 function (void)writeIndOutput(string outfile, logical header){
 	if (header){
-		loci_names = sapply(0:(NLOCI-1), "paste0('L', applyValue);");
-		haplosome1_names = sapply(loci_names, "paste0(applyValue, 'A0');");
-		haplosome2_names = sapply(loci_names, "paste0(applyValue, 'A1');");
-		header_string = paste0("PatchID,XCOORD,YCOORD,ID,sex,age,size,mature,layeggs,", paste(c(haplosome1_names, haplosome2_names), sep = ","));
+		if(NLOCI > 0){
+			loci_names = sapply(0:(NLOCI-1), "paste0('L', applyValue);");
+			haplosome1_names = sapply(loci_names, "paste0(applyValue, 'A0');");
+			haplosome2_names = sapply(loci_names, "paste0(applyValue, 'A1');");
+			header_string = paste0("PatchID,XCOORD,YCOORD,ID,sex,age,size,mature,layeggs,", paste(c(haplosome1_names, haplosome2_names), sep = ","));
+		}
+		if(NLOCI == 0){
+			header_string = "PatchID,XCOORD,YCOORD,ID,sex,age,size,mature,layeggs";
+		}
 		writeFile(outfile, header_string);
 		return;
 	}
@@ -1092,7 +1180,12 @@ function (void)writeIndOutput(string outfile, logical header){
 			size = ind.getValue("size");
 			mature = asInteger(ind.tagL0);
 			layeggs = asInteger(ind.tagL1);
-			writeFile(outfile, paste(c(PatchID,XCOORD,YCOORD,ID,sex,age,size,mature,layeggs,ind.haplosomes[0].mutations.tag,ind.haplosomes[1].mutations.tag), sep = ","), append = T);
+			if(NLOCI > 0){
+				writeFile(outfile, paste(c(PatchID,XCOORD,YCOORD,ID,sex,age,size,mature,layeggs,ind.haplosomes[0].mutationsOfType(m1).tag,ind.haplosomes[1].mutationsOfType(m1).tag), sep = ","), append = T);
+			}
+			if(NLOCI == 0){
+				writeFile(outfile, paste(c(PatchID,XCOORD,YCOORD,ID,sex,age,size,mature,layeggs), sep = ","), append = T);
+			}
 		}	
 	}
 }
