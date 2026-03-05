@@ -13,6 +13,8 @@ initialize() {
 		"IND_OUT_FOLDER", "climate_change_McKenzie/slimgui_testing/", // Folder for individual output
 		"ALLPOPS_OUT", "climate_change_McKenzie/slimgui_testing/summary_popAllTime.csv",
 		"BYCLASS", "climate_change_McKenzie/slimgui_testing/summary_classAllTime.csv",
+		"QTL_OUT", "climate_change_McKenzie/slimgui_testing/QTL_overall.csv",
+		"QTL_SUBPOPS_OUT", "climate_change_McKenzie/slimgui_testing/QTL_subpops.csv",
 		"FINISHED", "climate_change_McKenzie/slimgui_testing/finished.txt",
 		"SCALEPOPSIZE", 1, // Decrease carrying capacities for testing
 		"NPATCHES", 'all' // Decrease number of patches for testing
@@ -68,6 +70,10 @@ initialize() {
 	// Output
 	writeSubpopOutput(ALLPOPS_OUT, header = T);	
 	writeClassOutput(BYCLASS, header = T);
+	if(QTL){
+		writeQTLOutputOverall(QTL_OUT, header = T);
+		writeQTLOutputSubpops(QTL_SUBPOPS_OUT, header = T);
+	}
 	
 	// Set up genome
 	// Genomic element g1 is neutral loci set up like the original CDMetaPOP
@@ -92,7 +98,9 @@ initialize() {
 		initializeGenomicElement(g1, 0, NLOCI - 1);
 		// Mutation linked to quantitative trait
 		initializeMutationType("m2", 0.5, "s", QTL_PHENO_EFF);
-		initializeGenomicElementType("g2", m2, 1.0);
+		// Neutral mutations
+		initializeMutationType("m3", 0.5, "f", 0.0);
+		initializeGenomicElementType("g2", c(m2, m3), c(1.0 - QTL_PROP_GENOME, QTL_PROP_GENOME));
 		initializeGenomicElement(g2, NLOCI, NLOCI - 1 + QTL_GEN_LENGTH);
 		// Mutation rates and recombination rates
 		initializeMutationRate(c(0, QTL_MUTERATE), c(NLOCI -1, NLOCI + QTL_GEN_LENGTH - 1));
@@ -131,6 +139,11 @@ first(){
 			// Set maturity
 			mature(individuals);
 			individuals.tagL1 = F; // Lay eggs
+			// Set phenotypes for trait
+			if(QTL){
+				phenotypes = individuals.sumOfMutationsOfType(m2) + rnorm(length(individuals), mean = 0, sd = sqrt(QTL_VE)) + QTL_BASELINE;
+				individuals.setValuesVectorized("phenotype", phenotypes);
+			}
 		}	
 	}
 }
@@ -317,6 +330,11 @@ reproduction(NULL, "F") {
 				offspring.setValue("cdmp_age", -1);
 				offspring.tagL0 = F;
 				offspring.tagL1 = F;
+				// QTL
+				if(QTL){
+					phenotypes = offspring.sumOfMutationsOfType(m2) + rnorm(length(offspring), mean = 0, sd = sqrt(QTL_VE)) + QTL_BASELINE;
+					offspring.setValuesVectorized("phenotype", phenotypes);
+				}
 			}
 		}
 	}
@@ -396,15 +414,6 @@ early(){
 mutationEffect(m1) { return 1.0; }
 mutationEffect(m2) { return 1.0; }
 
-
-OUTPUT_TICKS late(){
-	
-	// Individual output
-	print("Writing individual output");
-	outfile = IND_OUT_FOLDER + paste0('ind', community.tick, '.csv');
-	writeIndOutput(outfile, header = T);
-	writeIndOutput(outfile, header = F);
-}
 
 late(){
 	print("Migration Out");
@@ -531,8 +540,7 @@ late() {
 	if(QTL){
 		print("QTL selection back");
 		inds = sim.subpopulations.individuals;
-		phenotypes = inds.sumOfMutationsOfType(m2) + rnorm(length(inds), mean = 0, sd = sqrt(QTL_VE)) + QTL_BASELINE;
-		inds.setValuesVectorized("phenotype", phenotypes);
+		phenotypes = inds.getValue('phenotype');
 		patches = inds.subpopulation.id;
 		// Get current values of environmental variables
 		optimums = executeLambda(QTL_ENV_VARIABLE + ";");
@@ -577,11 +585,24 @@ late(){
 	defineGlobal("N2", sim.subpopulations.individualCount);
 }
 
+OUTPUT_TICKS late(){
+	// Individual output
+	print("Writing individual output");
+	outfile = IND_OUT_FOLDER + paste0('ind', community.tick, '.csv');
+	writeIndOutput(outfile, header = T);
+	writeIndOutput(outfile, header = F);
+}
+
 late(){
 	print("Writing output for all subpopulations");
 	writeSubpopOutput(ALLPOPS_OUT, header = F);
 	print("Writing output by class");
 	writeClassOutput(BYCLASS, header = F);
+	if(QTL){
+		print("Writing QTL output");
+		writeQTLOutputOverall(QTL_OUT, header = F);
+		writeQTLOutputSubpops(QTL_SUBPOPS_OUT, header = F);
+	}
 }
 
 late() {
@@ -958,7 +979,7 @@ function (void)setupConstantsFromPopVars(object<Dictionary>$ popvars)
 	
 	// Set up QTL
 	defineConstant("QTL_GEN_LENGTH", popvars.getValue('genome_length'));
-	defineConstant("QTL_PROP_GENOME", popvars.getValue('prop_genome'));
+	defineConstant("QTL_PROP_GENOME", popvars.getValue('qtl_prop_genome'));
 	defineConstant("QTL_PHENO_EFF", popvars.getValue('qtl_pheno_eff') + ";");
 	defineConstant("QTL_ENV_VARIABLE", popvars.getValue('qtl_env_variable'));
 	defineConstant("QTL_BASELINE", mean(PATCHVARS.getValue(QTL_ENV_VARIABLE)));
@@ -1100,6 +1121,54 @@ function (void)writeSubpopOutput(string outfile, logical header){
 		
 }
 
+function (void) writeQTLOutputOverall(string outfile, logical header){
+	overall_header = "year,K,popsize,phenotypic_variance,Va,Ve,heritability,qtl_alleles,neutral_alleles,neutral_pi,overall_pi";
+	if(header){
+		writeFile(outfile, overall_header);
+		return;
+	}
+	year = community.tick;
+	K = sum(PATCHKS);
+	popsize = sum(sim.subpopulations.individualCount);
+	phenotypic_variance = var(sim.subpopulations.individuals.getValue('phenotype'));
+	Va = calcVA(sim.subpopulations.individuals, m2);
+	Ve = var(sim.subpopulations.individuals.getValue('phenotype') - sim.subpopulations.individuals.sumOfMutationsOfType(m2));
+	heritability = Va/phenotypic_variance;
+	qtl_alleles = length(unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2)));
+	neutral_alleles = length(unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(m3)));
+	neutral_pi = calcPi(sim.subpopulations.individuals.haplosomes, sim.subpopulations.individuals.haplosomes.mutationsOfType(m3));
+	overall_pi = calcPi(sim.subpopulations.individuals.haplosomes, c(sim.subpopulations.individuals.haplosomes.mutationsOfType(m3), sim.subpopulations.individuals.haplosomes.mutationsOfType(m2)));
+	overall_line = paste(executeLambda("c(" + overall_header + ");"), sep = ",");
+	writeFile(outfile, overall_line, append = T);
+	return;
+}
+function (void) writeQTLOutputSubpops(string outfile, logical header){
+	subpop_header = "year,PatchID,K,popsize,qtl_environment,avg_phenotype,phenotypic_variance,Va,Ve,heritability,qtl_alleles,neutral_alleles,neutral_pi,overall_pi";
+	if(header){
+		writeFile(outfile, subpop_header);
+		return;
+	}
+	year = community.tick;
+	for(subpop in sim.subpopulations){
+		PatchID = subpop.id;
+		K = PATCHKS[PatchID];
+		popsize = subpop.individualCount;
+		qtl_environment = executeLambda(QTL_ENV_VARIABLE + ";")[PatchID];
+		avg_phenotype = mean(subpop.individuals.getValue('phenotype'));
+		phenotypic_variance = var(subpop.individuals.getValue('phenotype'));
+		Va = calcVA(subpop.individuals, m2);
+		Ve = var(subpop.individuals.getValue('phenotype') - subpop.individuals.sumOfMutationsOfType(m2));
+		heritability = Va/phenotypic_variance;
+		qtl_alleles = length(unique(subpop.individuals.haplosomes.mutationsOfType(m2)));
+		neutral_alleles = length(unique(subpop.individuals.haplosomes.mutationsOfType(m3)));
+		neutral_pi = calcPi(subpop.individuals.haplosomes, subpop.individuals.haplosomes.mutationsOfType(m3));
+		overall_pi = calcPi(subpop.individuals.haplosomes, c(subpop.individuals.haplosomes.mutationsOfType(m3), subpop.individuals.haplosomes.mutationsOfType(m2)));
+		subpop_line = paste(executeLambda("c(" + subpop_header + ");"), sep = ",");
+		writeFile(outfile, subpop_line, append = T);
+	}
+	return;
+}
+
 function (void)writeClassOutput(string outfile, logical header){
 	
 	if(header){
@@ -1154,16 +1223,25 @@ function (void)writeClassOutput(string outfile, logical header){
 	//N_AfterEmigration,Deaths_AfterEmiMort_Age,Deaths_AfterEmiMort_Size,N_GrowthOut,Capture_Out,,N_Immigration,Deaths_AfterImmiMort_Age,Deaths_AfterImmiMort_Size
 
 }
+
 function (void)writeIndOutput(string outfile, logical header){
 	if (header){
 		if(NLOCI > 0){
 			loci_names = sapply(0:(NLOCI-1), "paste0('L', applyValue);");
 			haplosome1_names = sapply(loci_names, "paste0(applyValue, 'A0');");
 			haplosome2_names = sapply(loci_names, "paste0(applyValue, 'A1');");
-			header_string = paste0("PatchID,XCOORD,YCOORD,ID,sex,age,size,mature,layeggs,", paste(c(haplosome1_names, haplosome2_names), sep = ","));
+			if(!QTL){
+				header_string = paste0("PatchID,XCOORD,YCOORD,ID,sex,age,size,mature,layeggs,", paste(c(haplosome1_names, haplosome2_names), sep = ","));
+			}
+			if(QTL){
+				header_string = paste0("PatchID,XCOORD,YCOORD,ID,sex,age,size,mature,layeggs,", paste(c(haplosome1_names, haplosome2_names), sep = ","), ",phenotype");
+			}
 		}
-		if(NLOCI == 0){
+		if(NLOCI == 0 & !QTL){
 			header_string = "PatchID,XCOORD,YCOORD,ID,sex,age,size,mature,layeggs";
+		}
+		if(NLOCI == 0 & QTL){
+			header_string = "PatchID,XCOORD,YCOORD,ID,sex,age,size,mature,layeggs,phenotype";
 		}
 		writeFile(outfile, header_string);
 		return;
@@ -1181,10 +1259,18 @@ function (void)writeIndOutput(string outfile, logical header){
 			mature = asInteger(ind.tagL0);
 			layeggs = asInteger(ind.tagL1);
 			if(NLOCI > 0){
-				writeFile(outfile, paste(c(PatchID,XCOORD,YCOORD,ID,sex,age,size,mature,layeggs,ind.haplosomes[0].mutationsOfType(m1).tag,ind.haplosomes[1].mutationsOfType(m1).tag), sep = ","), append = T);
+				if(!QTL){
+					writeFile(outfile, paste(c(PatchID,XCOORD,YCOORD,ID,sex,age,size,mature,layeggs,ind.haplosomes[0].mutationsOfType(m1).tag,ind.haplosomes[1].mutationsOfType(m1).tag), sep = ","), append = T);
+				}
+				if(QTL){
+					writeFile(outfile, paste(c(PatchID,XCOORD,YCOORD,ID,sex,age,size,mature,layeggs,ind.haplosomes[0].mutationsOfType(m1).tag,ind.haplosomes[1].mutationsOfType(m1).tag,ind.getValue('phenotype')), sep = ","), append = T);
+				}
 			}
-			if(NLOCI == 0){
+			if(NLOCI == 0 & !QTL){
 				writeFile(outfile, paste(c(PatchID,XCOORD,YCOORD,ID,sex,age,size,mature,layeggs), sep = ","), append = T);
+			}
+			if(NLOCI == 0 & QTL){
+				writeFile(outfile, paste(c(PatchID,XCOORD,YCOORD,ID,sex,age,size,mature,layeggs,ind.getValue('phenotype')), sep = ","), append = T);
 			}
 		}	
 	}

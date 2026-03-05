@@ -132,6 +132,8 @@ def run_slim(run_df, sim_info_q):
                 -d 'IND_OUT_FOLDER=\"{rep_output_folder}\"'\
                 -d 'ALLPOPS_OUT=\"{rep_output_folder + "summary_popAllTime.csv"}\"'\
                 -d 'BYCLASS=\"{rep_output_folder + "summary_classAllTime.csv"}\"' \
+                -d 'QTL_OUT=\"{rep_output_folder + "QTL_overall.csv"}\"'\
+                -d 'QTL_SUBPOPS_OUT=\"{rep_output_folder + "QTL_subpops.csv"}\"'\
                 -d 'FINISHED=\"{simulation_finished}\"' {script_dir}/scripts/cdmetapop_slim.slim"
             stdout_file = f"{rep_output_folder}log.txt"
             with open(stdout_file, 'w') as f:
