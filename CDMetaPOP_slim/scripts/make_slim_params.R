@@ -240,11 +240,13 @@ for(run in 1:nruns){
   }
   
   ## 3. Process remaining variables ##
-  popvars_new  = mutate(popvars_new, mature_eqn_slope_f = str_split_i(mature_eqn_slope, "~", 1),
-                    mature_eqn_slope_m = str_split_i(mature_eqn_slope, "~", 2),
-                    mature_eqn_int_f = str_split_i(mature_eqn_int, "~", 1),
-                    mature_eqn_int_m = str_split_i(mature_eqn_int, "~", 2),
-                    mature_age = gsub("age", "", mature_default))
+  popvars_new = mutate(popvars_new, mature_age = gsub("age", "", mature_default))
+  if(runvars$sizecontrol == 'Y'){
+    popvars_new  = mutate(popvars_new, mature_eqn_slope_f = str_split_i(mature_eqn_slope, "~", 1),
+                      mature_eqn_slope_m = str_split_i(mature_eqn_slope, "~", 2),
+                      mature_eqn_int_f = str_split_i(mature_eqn_int, "~", 1),
+                      mature_eqn_int_m = str_split_i(mature_eqn_int, "~", 2))
+  }
   if(grep("~", popvars_new$mature_age[1])){
     popvars_new <- mutate(popvars_new,
                           mature_age_f = str_split_i(mature_age, "~", 1),

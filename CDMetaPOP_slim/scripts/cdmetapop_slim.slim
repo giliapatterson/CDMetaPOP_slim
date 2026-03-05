@@ -101,10 +101,10 @@ initialize() {
 		// Neutral mutations
 		initializeMutationType("m3", 0.5, "f", 0.0);
 		initializeGenomicElementType("g2", c(m2, m3), c(1.0 - QTL_PROP_GENOME, QTL_PROP_GENOME));
-		initializeGenomicElement(g2, NLOCI, NLOCI - 1 + QTL_GEN_LENGTH);
+		initializeGenomicElement(g2, NLOCI, asInteger(NLOCI - 1 + QTL_GEN_LENGTH));
 		// Mutation rates and recombination rates
-		initializeMutationRate(c(0, QTL_MUTERATE), c(NLOCI -1, NLOCI + QTL_GEN_LENGTH - 1));
-		initializeRecombinationRate(c(0.5, QTL_RECRATE), c(NLOCI -1, NLOCI + QTL_GEN_LENGTH - 1));
+		initializeMutationRate(c(0, QTL_MUTERATE), c(NLOCI -1, asInteger(NLOCI + QTL_GEN_LENGTH - 1)));
+		initializeRecombinationRate(c(0.5, QTL_RECRATE), c(NLOCI -1, asInteger(NLOCI + QTL_GEN_LENGTH - 1)));
 		m1.convertToSubstitution = F;
 		m2.convertToSubstitution = F;
 	}
@@ -257,8 +257,8 @@ CHANGE_YEARS first(){
 			sim.chromosome.setRecombinationRate(QTL_RECRATE);
 		}
 		if(NLOCI > 0 & QTL){
-			sim.chromosome.setMutationRate(c(0, QTL_MUTERATE), c(NLOCI -1, NLOCI + QTL_GEN_LENGTH - 1));
-			sim.chromosome.setRecombinationRate(c(0.5, QTL_RECRATE), c(NLOCI -1, NLOCI + QTL_GEN_LENGTH - 1));
+			sim.chromosome.setMutationRate(c(0, QTL_MUTERATE), c(NLOCI -1, asInteger(NLOCI + QTL_GEN_LENGTH - 1)));
+			sim.chromosome.setRecombinationRate(c(0.5, QTL_RECRATE), c(NLOCI -1, asInteger(NLOCI + QTL_GEN_LENGTH - 1)));
 		}
 	}
 }
@@ -288,7 +288,6 @@ first(){
 
 first(){
 	print("Reproduction");
-	individuals = sim.subpopulations.individuals;
 }
 
 reproduction(NULL, "F") {
@@ -459,10 +458,7 @@ late(){
 	kill = individuals[runif(length(individuals)) < prob_dies];
 	sim.killIndividuals(kill);
 	print(length(kill) + " individuals died.");
-	individuals = sim.subpopulations.individuals;
-	age0s = individuals[age_class(individuals, method = "age") == 0];
-	print(length(age0s) + " total age 0s");
-	print(sum(age0s.tagL0) + " mature age 0s");
+
 }
 
 late(){
@@ -480,12 +476,9 @@ late(){
 	individuals = sim.subpopulations.subsetIndividuals(tagL0 = F);
 	//print(length(individuals) + " individuals aren't yet mature.");
 	mature(individuals);
-	//print(sum(individuals.tagL0) + " individuals matured.");
+	print(sum(individuals.tagL0) + " individuals matured.");
 	// CDMetaPOP output here
-	individuals = sim.subpopulations.individuals;
-	age0s = individuals[age_class(individuals, method = "age") == 0];
-	print(length(age0s) + " total age 0s");
-	print(sum(age0s.tagL0) + " mature age 0s");
+
 }
 
 late(){
@@ -524,14 +517,14 @@ late(){
 	dispersers = individuals[runif(length(individuals)) < pdisperse];
 	print(length(dispersers) + " individuals dispersed.");
 	destinations = sample_subpops(dispersers, DISPERSELOCAL);
-	for(source in unique(dispersers.subpopulation)){
-		source_dispersers = dispersers[dispersers.subpopulation == source];
-		print("Source: " + source.id + " Dispersers: " + length(source_dispersers));
-		for (dest in unique(destinations)){
-			source_dest = dispersers[dispersers.subpopulation == source & destinations == dest];
-			print("     Destination: " + dest.id + " " + length(source_dest) + " " + length(source_dest)/length(source_dispersers));
-		}
-	}
+//	for(source in unique(dispersers.subpopulation)){
+//		source_dispersers = dispersers[dispersers.subpopulation == source];
+//		print("Source: " + source.id + " Dispersers: " + length(source_dispersers));
+//		for (dest in unique(destinations)){
+//			source_dest = dispersers[dispersers.subpopulation == source & destinations == dest];
+//			print("     Destination: " + dest.id + " " + length(source_dest) + " " + length(source_dest)/length(source_dispersers));
+//		}
+//	}
 	for (dest in unique(destinations)){dest.takeMigrants(dispersers[destinations == dest]);}
 }
 
@@ -567,8 +560,7 @@ late() {
 		nkilled = carrying_capacity_mortality();
 	}
 	defineGlobal("DEATHS2", nkilled.getValue("nkilled_subpops"));
-	defineGlobal("DEATHS2_AGE", nkilled.getValue("nkilled_ages"));
-	
+	defineGlobal("DEATHS2_AGE", nkilled.getValue("nkilled_ages"));	
 	
 }
 
@@ -606,10 +598,14 @@ late(){
 }
 
 late() {
-	if (sum(sim.subpopulations.individualCount) == 0)
+	if (sum(sim.subpopulations.individualCount) == 0){
+		writeFile(FINISHED, "Simulation extinct");
+		print("Simulation extinct in " + (clock() - start) + " seconds.");
 		stop("Global extinction in cycle " + sim.cycle + ".");
-	if (sum(sim.subpopulations.individualCount) > 500000)
+	}
+	if (sum(sim.subpopulations.individualCount) > 500000){
 		stop("Global population too big in cycle " + sim.cycle + ".");
+	}
 	print("Tick " + community.tick + " complete: " + (clock() - tickstart) + " seconds."); 
 	print("Pop size: " + sum(sim.subpopulations.individualCount) + " Total K: " + sum(PATCHKS));
 	print("-----------------------------------------------------------------------------");
@@ -1130,14 +1126,26 @@ function (void) writeQTLOutputOverall(string outfile, logical header){
 	year = community.tick;
 	K = sum(PATCHKS);
 	popsize = sum(sim.subpopulations.individualCount);
-	phenotypic_variance = var(sim.subpopulations.individuals.getValue('phenotype'));
-	Va = calcVA(sim.subpopulations.individuals, m2);
-	Ve = var(sim.subpopulations.individuals.getValue('phenotype') - sim.subpopulations.individuals.sumOfMutationsOfType(m2));
-	heritability = Va/phenotypic_variance;
-	qtl_alleles = length(unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2)));
-	neutral_alleles = length(unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(m3)));
-	neutral_pi = calcPi(sim.subpopulations.individuals.haplosomes, sim.subpopulations.individuals.haplosomes.mutationsOfType(m3));
-	overall_pi = calcPi(sim.subpopulations.individuals.haplosomes, c(sim.subpopulations.individuals.haplosomes.mutationsOfType(m3), sim.subpopulations.individuals.haplosomes.mutationsOfType(m2)));
+	if(popsize > 1){
+		phenotypic_variance = var(sim.subpopulations.individuals.getValue('phenotype'));
+		Va = calcVA(sim.subpopulations.individuals, m2);
+		Ve = var(sim.subpopulations.individuals.getValue('phenotype') - sim.subpopulations.individuals.sumOfMutationsOfType(m2));
+		heritability = Va/(Va + Ve);
+		qtl_alleles = length(unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2)));
+		neutral_alleles = length(unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(m3)));
+		neutral_pi = calcPi(sim.subpopulations.individuals.haplosomes, sim.subpopulations.individuals.haplosomes.mutationsOfType(m3));
+		overall_pi = calcPi(sim.subpopulations.individuals.haplosomes, c(sim.subpopulations.individuals.haplosomes.mutationsOfType(m3), sim.subpopulations.individuals.haplosomes.mutationsOfType(m2)));
+	}
+	else{
+		phenotypic_variance = 'NA';
+		Va = 'NA';
+		Ve = 'NA';
+		heritability = 'NA';
+		qtl_alleles = 'NA';
+		neutral_alleles = 'NA';
+		neutral_pi = 'NA';
+		overall_pi = 'NA';
+	}
 	overall_line = paste(executeLambda("c(" + overall_header + ");"), sep = ",");
 	writeFile(outfile, overall_line, append = T);
 	return;
@@ -1154,15 +1162,28 @@ function (void) writeQTLOutputSubpops(string outfile, logical header){
 		K = PATCHKS[PatchID];
 		popsize = subpop.individualCount;
 		qtl_environment = executeLambda(QTL_ENV_VARIABLE + ";")[PatchID];
-		avg_phenotype = mean(subpop.individuals.getValue('phenotype'));
-		phenotypic_variance = var(subpop.individuals.getValue('phenotype'));
-		Va = calcVA(subpop.individuals, m2);
-		Ve = var(subpop.individuals.getValue('phenotype') - subpop.individuals.sumOfMutationsOfType(m2));
-		heritability = Va/phenotypic_variance;
-		qtl_alleles = length(unique(subpop.individuals.haplosomes.mutationsOfType(m2)));
-		neutral_alleles = length(unique(subpop.individuals.haplosomes.mutationsOfType(m3)));
-		neutral_pi = calcPi(subpop.individuals.haplosomes, subpop.individuals.haplosomes.mutationsOfType(m3));
-		overall_pi = calcPi(subpop.individuals.haplosomes, c(subpop.individuals.haplosomes.mutationsOfType(m3), subpop.individuals.haplosomes.mutationsOfType(m2)));
+		if(popsize > 1){
+			avg_phenotype = mean(subpop.individuals.getValue('phenotype'));
+			phenotypic_variance = var(subpop.individuals.getValue('phenotype'));
+			Va = calcVA(subpop.individuals, m2);
+			Ve = var(subpop.individuals.getValue('phenotype') - subpop.individuals.sumOfMutationsOfType(m2));
+			heritability = Va/(Va + Ve);
+			qtl_alleles = length(unique(subpop.individuals.haplosomes.mutationsOfType(m2)));
+			neutral_alleles = length(unique(subpop.individuals.haplosomes.mutationsOfType(m3)));
+			neutral_pi = calcPi(subpop.individuals.haplosomes, subpop.individuals.haplosomes.mutationsOfType(m3));
+			overall_pi = calcPi(subpop.individuals.haplosomes, c(subpop.individuals.haplosomes.mutationsOfType(m3), subpop.individuals.haplosomes.mutationsOfType(m2)));
+		}
+		else{
+			avg_phenotype = 'NA';
+			phenotypic_variance = 'NA';
+			Va = 'NA';
+			Ve = 'NA';
+			heritability = 'NA';
+			qtl_alleles = 'NA';
+			neutral_alleles = 'NA';
+			neutral_pi = 'NA';
+			overall_pi = 'NA';
+		}
 		subpop_line = paste(executeLambda("c(" + subpop_header + ");"), sep = ",");
 		writeFile(outfile, subpop_line, append = T);
 	}
