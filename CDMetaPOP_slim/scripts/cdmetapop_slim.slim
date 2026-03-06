@@ -545,6 +545,7 @@ late() {
 		deviations = optimums[patches] - phenotypes;
 		fitnessFunctionMax = dnorm(0.0, 0.0, QTL_FIT_SD);
 		psurvive = dnorm(deviations, 0.0, QTL_FIT_SD)/fitnessFunctionMax;
+		print(psurvive);
 		kill = inds[runif(length(inds)) > psurvive];
 		print(length(kill) + " individuals killed");
 		sim.killIndividuals(kill);
@@ -1123,7 +1124,7 @@ function (void)writeSubpopOutput(string outfile, logical header){
 }
 
 function (void) writeQTLOutputOverall(string outfile, logical header){
-	overall_header = "year,K,popsize,phenotypic_variance,Va,Ve,heritability,qtl_alleles,neutral_alleles,neutral_pi,overall_pi";
+	overall_header = "year,K,popsize,phenotypic_variance,Va,Ve,heritability,qtl_alleles,neutral_pi,overall_pi";
 	if(header){
 		writeFile(outfile, overall_header);
 		return;
@@ -1137,7 +1138,6 @@ function (void) writeQTLOutputOverall(string outfile, logical header){
 		Ve = var(sim.subpopulations.individuals.getValue('phenotype') - sim.subpopulations.individuals.sumOfMutationsOfType(m2));
 		heritability = Va/(Va + Ve);
 		qtl_alleles = length(unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2)));
-		neutral_alleles = length(unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(m3)));
 		neutral_pi = calcPi(sim.subpopulations.individuals.haplosomes, sim.subpopulations.individuals.haplosomes.mutationsOfType(m3));
 		overall_pi = calcPi(sim.subpopulations.individuals.haplosomes, c(sim.subpopulations.individuals.haplosomes.mutationsOfType(m3), sim.subpopulations.individuals.haplosomes.mutationsOfType(m2)));
 	}
@@ -1147,7 +1147,6 @@ function (void) writeQTLOutputOverall(string outfile, logical header){
 		Ve = 'NA';
 		heritability = 'NA';
 		qtl_alleles = 'NA';
-		neutral_alleles = 'NA';
 		neutral_pi = 'NA';
 		overall_pi = 'NA';
 	}
