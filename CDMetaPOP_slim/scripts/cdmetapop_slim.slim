@@ -395,7 +395,7 @@ early(){
 	if(!SIZECONTROL){
 		// Mature age 0s if SIZECONTROL is not operationg
 		// Note that this behavior is for consistency with CDMetaPOP, and could be a bug in CDMetaPOP
-		mature(age0s);
+		if(length(age0s) > 0) mature(age0s);
 		// Set new body sizes based on age (but don't let individuals shrink)
 		individuals = sim.subpopulations.individuals[age_class(sim.subpopulations.individuals, 'age') != 0];
 		ages = age_class(individuals, method = "age");
@@ -475,8 +475,13 @@ late(){
 	// Find individuals that aren't yet mature
 	individuals = sim.subpopulations.subsetIndividuals(tagL0 = F);
 	//print(length(individuals) + " individuals aren't yet mature.");
-	mature(individuals);
-	print(sum(individuals.tagL0) + " individuals matured.");
+	if(length(individuals)>0){
+		mature(individuals);
+		print(sum(individuals.tagL0) + " individuals matured.");
+	}
+	else{
+		print("No non-mature individuals");
+	}
 	// CDMetaPOP output here
 
 }

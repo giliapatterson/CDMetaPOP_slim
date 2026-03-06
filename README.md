@@ -67,6 +67,20 @@ mamba activate cdmetapop_slim
 
 ## Example runs
 
+### Modeling thermal optimum as a quantitative trait
+
+```
+example_runs/climate_change_McKenzie
+```
+
+This example models the evolution of thermal tolerance as the climate warms. The example folder contains a bash script, `run_and_plot.sh` that generates the input files for CDMetaPOP_slim, runs the simulations, and plots population sizes, phenotypes, heritability, and genetic diversity over time. The resulting plots will be in the folder `example_runs/climate_change_McKenzie/qtl_plots`.
+
+To run the script, navigate to the `example_runs` directory (`cd example_runs`), then run the bash script:
+
+```
+bash climate_change_McKenzie/run_and_plot.sh
+```
+
 ### Coastal cutthroat trout in the McKenzie
 
 ```
