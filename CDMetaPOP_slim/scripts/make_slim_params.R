@@ -281,6 +281,9 @@ for(run in 1:nruns){
   if(has_name(popvars, "genome_length")){
     popvars_used <- c(popvars_used, "genome_length", "qtl_prop_genome", "qtl_pheno_eff", "qtl_env_variable",
                       "qtl_muterate", "qtl_recrate", "qtl_ve", "qtl_fit_sd")
+    if(has_name(popvars, "qtl_mutations_initial")){
+      popvars_used <- c(popvars_used, "qtl_mutations_initial")
+    }
   }
   # For gene initialization method "random", check that number of alleles is a single number
   if(genes_method == "random"){

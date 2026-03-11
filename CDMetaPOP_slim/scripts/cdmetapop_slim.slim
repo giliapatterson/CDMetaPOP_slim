@@ -8,7 +8,8 @@ initialize() {
 	// then the values of the default parameters will be overridden with the values sepcified
 	defaults = Dictionary(
 		"SEED", getSeed(), // random seed
-		"RUNVARS_FILE", 'climate_change_McKenzie/slim_output/slim_parameters/run1/RunVars_slim.csv', // File containing run info
+		"RUNVARS_FILE", 'climate_change_McKenzie/slim_output/slim_parameters/run2/RunVars_slim.csv', // File containing run info
+		//"RUNVARS_FILE", 'QTL_test/RunVars_slim.csv', // File containing run info
 		"PARAM_FOLDER", "./", // Folder containing parameter files
 		"IND_OUT_FOLDER", "climate_change_McKenzie/slimgui_testing/", // Folder for individual output
 		"ALLPOPS_OUT", "climate_change_McKenzie/slimgui_testing/summary_popAllTime.csv",
@@ -84,8 +85,9 @@ initialize() {
 		initializeMutationType("m2", 0.5, "s", QTL_PHENO_EFF);
 		// Neutral mutations
 		initializeMutationType("m3", 0.5, "f", 0.0);
-		initializeGenomicElementType("g2", c(m2, m3), c(1.0 - QTL_PROP_GENOME, QTL_PROP_GENOME));
-		initializeGenomicElement(g2, 0, QTL_GEN_LENGTH - 1);
+		initializeGenomicElementType("g2", c(m2, m3), c(QTL_PROP_GENOME, 1.0-QTL_PROP_GENOME));
+		initializeGenomicElement(g2, 0, asInteger(QTL_GEN_LENGTH - 1));
+		defineConstant("QTL_POSITIONS", 0:asInteger(QTL_GEN_LENGTH - 1));
 		// Mutation rates and recombination rates
 		initializeMutationRate(QTL_MUTERATE);
 		initializeRecombinationRate(QTL_RECRATE);
@@ -100,8 +102,9 @@ initialize() {
 		initializeMutationType("m2", 0.5, "s", QTL_PHENO_EFF);
 		// Neutral mutations
 		initializeMutationType("m3", 0.5, "f", 0.0);
-		initializeGenomicElementType("g2", c(m2, m3), c(1.0 - QTL_PROP_GENOME, QTL_PROP_GENOME));
+		initializeGenomicElementType("g2", c(m2, m3), c(QTL_PROP_GENOME, 1.0 - QTL_PROP_GENOME));
 		initializeGenomicElement(g2, NLOCI, asInteger(NLOCI - 1 + QTL_GEN_LENGTH));
+		defineConstant("QTL_POSITIONS", NLOCI:asInteger(NLOCI - 1 + QTL_GEN_LENGTH));
 		// Mutation rates and recombination rates
 		initializeMutationRate(c(0, QTL_MUTERATE), c(NLOCI -1, asInteger(NLOCI + QTL_GEN_LENGTH - 1)));
 		initializeRecombinationRate(c(0.5, QTL_RECRATE), c(NLOCI -1, asInteger(NLOCI + QTL_GEN_LENGTH - 1)));
@@ -139,12 +142,23 @@ first(){
 			// Set maturity
 			mature(individuals);
 			individuals.tagL1 = F; // Lay eggs
-			// Set phenotypes for trait
-			if(QTL){
-				phenotypes = individuals.sumOfMutationsOfType(m2) + rnorm(length(individuals), mean = 0, sd = sqrt(QTL_VE)) + QTL_BASELINE;
-				individuals.setValuesVectorized("phenotype", phenotypes);
-			}
 		}	
+	}
+	// Set initial alleles and phenotypes for trait
+	if(QTL){
+		if(!isNULL(POPVARS.getValue('qtl_mutations_initial'))){
+			nmutations = POPVARS.getValue('qtl_mutations_initial');
+			if(nmutations > 0){
+				mut_haplosomes = sample(sim.subpopulations.individuals.haplosomes, nmutations, replace = T);
+				mut_positions = sample( QTL_POSITIONS, nmutations, replace = T);
+				for(i in 0:(length(mut_haplosomes) - 1)){
+					mut_haplosomes[i].addNewDrawnMutation(m2, mut_positions[i]);
+				}
+			}
+		}
+		individuals = sim.subpopulations.individuals;
+		phenotypes = individuals.sumOfMutationsOfType(m2) + rnorm(length(individuals), mean = 0, sd = sqrt(QTL_VE)) + QTL_BASELINE;
+		individuals.setValuesVectorized("phenotype", phenotypes);
 	}
 }
 
@@ -542,10 +556,13 @@ late() {
 		patches = inds.subpopulation.id;
 		// Get current values of environmental variables
 		optimums = executeLambda(QTL_ENV_VARIABLE + ";");
+		print(length(phenotypes));
+		print(length(patches));
+		print(length(inds));
 		deviations = optimums[patches] - phenotypes;
 		fitnessFunctionMax = dnorm(0.0, 0.0, QTL_FIT_SD);
 		psurvive = dnorm(deviations, 0.0, QTL_FIT_SD)/fitnessFunctionMax;
-		print(psurvive);
+		//print(psurvive);
 		kill = inds[runif(length(inds)) > psurvive];
 		print(length(kill) + " individuals killed");
 		sim.killIndividuals(kill);
@@ -1124,7 +1141,7 @@ function (void)writeSubpopOutput(string outfile, logical header){
 }
 
 function (void) writeQTLOutputOverall(string outfile, logical header){
-	overall_header = "year,K,popsize,phenotypic_variance,Va,Ve,heritability,qtl_alleles,neutral_pi,overall_pi";
+	overall_header = "year,K,popsize,phenotypic_variance,Va,Ve,heritability,qtl_alleles,avg_effect_size,neutral_pi,overall_pi";
 	if(header){
 		writeFile(outfile, overall_header);
 		return;
@@ -1138,6 +1155,7 @@ function (void) writeQTLOutputOverall(string outfile, logical header){
 		Ve = var(sim.subpopulations.individuals.getValue('phenotype') - sim.subpopulations.individuals.sumOfMutationsOfType(m2));
 		heritability = Va/(Va + Ve);
 		qtl_alleles = length(unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2)));
+		avg_effect_size = mean(abs(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2).selectionCoeff));
 		neutral_pi = calcPi(sim.subpopulations.individuals.haplosomes, sim.subpopulations.individuals.haplosomes.mutationsOfType(m3));
 		overall_pi = calcPi(sim.subpopulations.individuals.haplosomes, c(sim.subpopulations.individuals.haplosomes.mutationsOfType(m3), sim.subpopulations.individuals.haplosomes.mutationsOfType(m2)));
 	}
@@ -1149,13 +1167,15 @@ function (void) writeQTLOutputOverall(string outfile, logical header){
 		qtl_alleles = 'NA';
 		neutral_pi = 'NA';
 		overall_pi = 'NA';
+		avg_effect_size = 'NA';
 	}
 	overall_line = paste(executeLambda("c(" + overall_header + ");"), sep = ",");
 	writeFile(outfile, overall_line, append = T);
+	print("QTL alleles: " + qtl_alleles);
 	return;
 }
 function (void) writeQTLOutputSubpops(string outfile, logical header){
-	subpop_header = "year,PatchID,K,popsize,qtl_environment,avg_phenotype,phenotypic_variance,Va,Ve,heritability,qtl_alleles,neutral_alleles,neutral_pi,overall_pi";
+	subpop_header = "year,PatchID,K,popsize,qtl_environment,avg_phenotype,phenotypic_variance,Va,Ve,heritability,qtl_alleles,avg_effect_size,neutral_pi,overall_pi";
 	if(header){
 		writeFile(outfile, subpop_header);
 		return;
@@ -1173,7 +1193,7 @@ function (void) writeQTLOutputSubpops(string outfile, logical header){
 			Ve = var(subpop.individuals.getValue('phenotype') - subpop.individuals.sumOfMutationsOfType(m2));
 			heritability = Va/(Va + Ve);
 			qtl_alleles = length(unique(subpop.individuals.haplosomes.mutationsOfType(m2)));
-			neutral_alleles = length(unique(subpop.individuals.haplosomes.mutationsOfType(m3)));
+			avg_effect_size = mean(abs(subpop.individuals.haplosomes.mutationsOfType(m2).selectionCoeff));
 			neutral_pi = calcPi(subpop.individuals.haplosomes, subpop.individuals.haplosomes.mutationsOfType(m3));
 			overall_pi = calcPi(subpop.individuals.haplosomes, c(subpop.individuals.haplosomes.mutationsOfType(m3), subpop.individuals.haplosomes.mutationsOfType(m2)));
 		}
@@ -1184,7 +1204,7 @@ function (void) writeQTLOutputSubpops(string outfile, logical header){
 			Ve = 'NA';
 			heritability = 'NA';
 			qtl_alleles = 'NA';
-			neutral_alleles = 'NA';
+			avg_effect_size = 'NA';
 			neutral_pi = 'NA';
 			overall_pi = 'NA';
 		}
