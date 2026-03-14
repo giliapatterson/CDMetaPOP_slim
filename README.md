@@ -103,6 +103,16 @@ The parameters for the quantitative trait model are specified in PopVars and are
 
 `qtl_fit_sd`: Standard deviation of the normal distribution used to determine fitness. Can change over time.
 
+`qtl_mutations_initial`: Number of initial mutations.
+
+In PatchVars:
+
+Setting the initial genotypes of every individual in the patch (optional). All individuals in a patch will have the same initial genotype.
+
+`qtl_loci_initial`: Number of loci underlying trait (e.g. 100)
+
+`qtl_dpe_initial`: Distribution of effect sizes for those loci. (e.g. 'rep(1/200, 100)').
+
 ### Output
 
 If the quantitative trait model is used, CDMetaPOP_slim will output two additional files, QTL_overall.csv and QTL subpops.csv. These files contain:
@@ -116,6 +126,8 @@ If the quantitative trait model is used, CDMetaPOP_slim will output two addition
 `heritability`: Equal to $V_A/(V_A + V_E)$.
 
 `qtl_alleles`: Number of alleles that influence the quantitative trait.
+
+`avg_effect_size`: Average phenotypic effect.
 
 `neutral_pi`: Genetic diversity for only the neutral portion of the genome.
 

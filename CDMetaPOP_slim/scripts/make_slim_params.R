@@ -191,6 +191,9 @@ for(run in 1:nruns){
   if(genes_method == "file"){
      patchvars_used = c(patchvars_used, "genes_file_slim")
   }
+  if(has_name(patchvars, 'qtl_loci_initial')){
+    patchvars_used = c(patchvars_used, 'qtl_dpe_initial', 'qtl_loci_initial')
+  }
   
   patchvars_out <- select(patchvars, all_of(patchvars_used))                    
   write_csv(patchvars_out, patchvars_file_out)

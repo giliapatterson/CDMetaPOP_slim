@@ -8,9 +8,10 @@ initialize() {
 	// then the values of the default parameters will be overridden with the values sepcified
 	defaults = Dictionary(
 		"SEED", getSeed(), // random seed
-		"RUNVARS_FILE", 'climate_change_McKenzie/slim_output/slim_parameters/run2/RunVars_slim.csv', // File containing run info
+		"RUNVARS_FILE", '../../trout-and-frogs/fixed_initial_alleles/climate_change_McKenzie2/slim_output/slim_parameters/run7/RunVars_slim.csv', // File containing run info
 		//"RUNVARS_FILE", 'QTL_test/RunVars_slim.csv', // File containing run info
-		"PARAM_FOLDER", "./", // Folder containing parameter files
+		//"PARAM_FOLDER", "./", // Folder containing parameter files
+		"PARAM_FOLDER", "../../trout-and-frogs/fixed_initial_alleles/", // Folder containing parameter files
 		"IND_OUT_FOLDER", "climate_change_McKenzie/slimgui_testing/", // Folder for individual output
 		"ALLPOPS_OUT", "climate_change_McKenzie/slimgui_testing/summary_popAllTime.csv",
 		"BYCLASS", "climate_change_McKenzie/slimgui_testing/summary_classAllTime.csv",
@@ -142,9 +143,17 @@ first(){
 			// Set maturity
 			mature(individuals);
 			individuals.tagL1 = F; // Lay eggs
+			// Set phenotypes by patch
+			if(QTL & !isNULL(PATCHVARS.getValue('qtl_loci_initial'))){
+				genomes = new_subpop.haplosomes;
+				loci = sample(QTL_POSITIONS, PATCHVARS.getValue('qtl_loci_initial')[new_subpop.id]);
+				pheno_effects = executeLambda(PATCHVARS.getValue('qtl_dpe_initial')[new_subpop.id] + ";");
+				//print(pheno_effects);
+				new_mutations = genomes.addNewMutation(m2, pheno_effects, loci); 
+			}
 		}	
 	}
-	// Set initial alleles and phenotypes for trait
+	// Set initial mutations and phenotypes for trait
 	if(QTL){
 		if(!isNULL(POPVARS.getValue('qtl_mutations_initial'))){
 			nmutations = POPVARS.getValue('qtl_mutations_initial');
@@ -160,6 +169,9 @@ first(){
 		phenotypes = individuals.sumOfMutationsOfType(m2) + rnorm(length(individuals), mean = 0, sd = sqrt(QTL_VE)) + QTL_BASELINE;
 		individuals.setValuesVectorized("phenotype", phenotypes);
 	}
+	//print(sapply(sim.subpopulations, "mean(applyValue.individuals.getValue('phenotype'));"));
+	//print(sapply(sim.subpopulations, "var(applyValue.individuals.getValue('phenotype'));"));
+	//print(length(unique(sim.subpopulations.haplosomes.mutationsOfType(m2))));
 }
 
 STARTGENES first(){
@@ -556,9 +568,6 @@ late() {
 		patches = inds.subpopulation.id;
 		// Get current values of environmental variables
 		optimums = executeLambda(QTL_ENV_VARIABLE + ";");
-		print(length(phenotypes));
-		print(length(patches));
-		print(length(inds));
 		deviations = optimums[patches] - phenotypes;
 		fitnessFunctionMax = dnorm(0.0, 0.0, QTL_FIT_SD);
 		psurvive = dnorm(deviations, 0.0, QTL_FIT_SD)/fitnessFunctionMax;
@@ -568,6 +577,7 @@ late() {
 		sim.killIndividuals(kill);
 		//print(GrowthTemperatureBack);
 		//print(sapply(sim.subpopulations, "mean(applyValue.individuals.getValue('phenotype'));"));
+		//print(sapply(sim.subpopulations, "var(applyValue.individuals.getValue('phenotype'));"));
 	}
 }
 
@@ -1015,7 +1025,7 @@ function (void)setupGlobalsFromPopVars(object<Dictionary>$ popvars){
 	}
 	if(popvars.getValue('matemoveno') == '9'){
 		defineGlobal("MATING", "matrix");
-		mate_matrix = readCSV(popvars.getValue('mate_cdmat'), colNames = asString(PATCHIDS));
+		mate_matrix = readCSV(PARAM_FOLDER + popvars.getValue('mate_cdmat'), colNames = asString(PATCHIDS));
 		if (NPATCHES != "all"){mate_matrix = mate_matrix.subsetColumns(PATCHIDS).subsetRows(PATCHIDS);}
 		// Convert to float (idk why this is so involved! There must be a better way.)
 		for (i in PATCHIDS){
@@ -1030,21 +1040,21 @@ function (void)setupGlobalsFromPopVars(object<Dictionary>$ popvars){
 	// Don't allow individuals to go to non-natal grounds in the back step
 	
 	// Migration out matrix
-	migration_matrix = readCSV(popvars.getValue('migrateout_cdmat'), colNames = asString(PATCHIDS)).asMatrix();
+	migration_matrix = readCSV(PARAM_FOLDER + popvars.getValue('migrateout_cdmat'), colNames = asString(PATCHIDS)).asMatrix();
 	mgrounds = PATCHVARS.getValue("Migration Grounds");
 	migration_matrix[,mgrounds == 0] = 0; // Can't migrate to non-migration grounds
 	if (NPATCHES != "all"){migration_matrix = migration_matrix[PATCHIDS,PATCHIDS];}
 	defineGlobal("MIGRATIONOUT", asFloat(migration_matrix));
 	
 	// Straying matrix
-	stray_matrix = readCSV(popvars.getValue('stray_cdmat'), colNames = asString(PATCHIDS)).asMatrix();
+	stray_matrix = readCSV(PARAM_FOLDER + popvars.getValue('stray_cdmat'), colNames = asString(PATCHIDS)).asMatrix();
 	ngrounds = PATCHVARS.getValue("Natal Grounds");
 	stray_matrix[,ngrounds == 0] = 0; // Can't stray to non-natal grounds
 	if (NPATCHES != "all"){stray_matrix = stray_matrix[PATCHIDS,PATCHIDS];}
 	defineGlobal("STRAYMATRIX", asFloat(stray_matrix));
 	
 	// Migration back matrix
-	migration_matrix = readCSV(popvars.getValue('migrateback_cdmat'), colNames = asString(PATCHIDS)).asMatrix();
+	migration_matrix = readCSV(PARAM_FOLDER + popvars.getValue('migrateback_cdmat'), colNames = asString(PATCHIDS)).asMatrix();
 	migration_matrix[,ngrounds == 0] = 0; // Can't migrate back to non-natal grounds
 	if (NPATCHES != "all"){migration_matrix = migration_matrix[PATCHIDS,PATCHIDS];}
 	defineGlobal("MIGRATIONBACK", asFloat(migration_matrix));
@@ -1065,7 +1075,7 @@ function (void)setupGlobalsFromPopVars(object<Dictionary>$ popvars){
 	defineGlobal("RETURNMATRIX", return_matrix);
 	
 	// Dispersal matrix
-	dispersal_matrix = readCSV(popvars.getValue('disperse_cdmat'), colNames = asString(PATCHIDS));
+	dispersal_matrix = readCSV(PARAM_FOLDER + popvars.getValue('disperse_cdmat'), colNames = asString(PATCHIDS));
 	if (NPATCHES != "all"){dispersal_matrix = dispersal_matrix.subsetColumns(PATCHIDS).subsetRows(PATCHIDS);}
 	defineGlobal("DISPERSELOCAL", asFloat(dispersal_matrix.asMatrix()));
 	
