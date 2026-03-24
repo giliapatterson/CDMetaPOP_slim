@@ -47,6 +47,8 @@ initialize() {
 	}
 	// Read in popvars for every year
 	defineConstant("POPVARS_ALL", readCSV(PARAM_FOLDER + RUNVARS.getValue("Popvars")[0]));
+	// Is a QTL implemented?
+	if(!isNULL(POPVARS_ALL.getValue("genome_length"))) defineConstant("QTL", T); else defineConstant("QTL", F);
 	// Initialize with year 0
 	defineGlobal("POPVARS", POPVARS_ALL.subsetRows(0));
 	// Set up params that can't change
@@ -66,8 +68,6 @@ initialize() {
 		defineConstant("CLIMATECHANGE", F);
 	}
 	
-	// Is a QTL implemented?
-	if(!isNULL(POPVARS_ALL.getValue("genome_length"))) defineConstant("QTL", T); else defineConstant("QTL", F);
 	
 	// Output
 	writeSubpopOutput(ALLPOPS_OUT, header = T);	
@@ -625,16 +625,18 @@ late(){
 }
 
 late() {
-	ne_subpops = sim.subpopulations[sim.subpopulations.individualCount > 0];
-	print("Phenotypes: ");
-	print(sapply(ne_subpops, "mean(applyValue.individuals.getValue('phenotype'));"));
-	print("Additive genetic contribution: ");
-	print(sapply(ne_subpops, "mean(applyValue.individuals.haplosomes.sumOfMutationsOfType(m2)) + QTL_BASELINE;"));
-	print("Temperatures: ");
-	print(GrowthTemperatureBack[ne_subpops.id]);
-	//print(sapply(ne_subpops, "var(applyValue.individuals.getValue('phenotype'));"));
-	print("Mutations: ");
-	print(sapply(ne_subpops, "length(unique(applyValue.haplosomes.mutationsOfType(m2)));"));
+	if(QTL){
+		ne_subpops = sim.subpopulations[sim.subpopulations.individualCount > 0];
+		print("Phenotypes: ");
+		print(sapply(ne_subpops, "mean(applyValue.individuals.getValue('phenotype'));"));
+		print("Additive genetic contribution: ");
+		print(sapply(ne_subpops, "mean(applyValue.individuals.haplosomes.sumOfMutationsOfType(m2)) + QTL_BASELINE;"));
+		print("Temperatures: ");
+		print(GrowthTemperatureBack[ne_subpops.id]);
+		//print(sapply(ne_subpops, "var(applyValue.individuals.getValue('phenotype'));"));
+		print("Mutations: ");
+		print(sapply(ne_subpops, "length(unique(applyValue.haplosomes.mutationsOfType(m2)));"));
+	}
 	if (sum(sim.subpopulations.individualCount) == 0){
 		writeFile(FINISHED, "Simulation extinct");
 		print("Simulation extinct in " + (clock() - start) + " seconds.");
@@ -880,7 +882,7 @@ function (object <Dictionary>)carrying_capacity_mortality(void){
 		if(subpop.individualCount == 0) next;
 		nsurvivors = PATCHKS[subpop.id];
 		if(subpop.individualCount <= nsurvivors) next;
-		ndeaths = subpop.individualCount - nsurvivors;
+		ndeaths = asInteger(subpop.individualCount - nsurvivors);
 		nkilled[subpop.id] = ndeaths;
 		deaths = subpop.sampleIndividuals(ndeaths, replace = F);
 		death_age_classes = age_class(deaths, 'age');
@@ -1010,12 +1012,14 @@ function (void)setupConstantsFromPopVars(object<Dictionary>$ popvars)
 	}
 	//print(NLOCI);
 	
-	// Set up QTL
-	defineConstant("QTL_GEN_LENGTH", popvars.getValue('genome_length'));
-	defineConstant("QTL_PROP_GENOME", popvars.getValue('qtl_prop_genome'));
-	defineConstant("QTL_PHENO_EFF", popvars.getValue('qtl_pheno_eff') + ";");
-	defineConstant("QTL_ENV_VARIABLE", popvars.getValue('qtl_env_variable'));
-	defineConstant("QTL_BASELINE", mean(PATCHVARS.getValue(QTL_ENV_VARIABLE)));
+	if(QTL){
+		// Set up QTL
+		defineConstant("QTL_GEN_LENGTH", popvars.getValue('genome_length'));
+		defineConstant("QTL_PROP_GENOME", popvars.getValue('qtl_prop_genome'));
+		defineConstant("QTL_PHENO_EFF", popvars.getValue('qtl_pheno_eff') + ";");
+		defineConstant("QTL_ENV_VARIABLE", popvars.getValue('qtl_env_variable'));
+		defineConstant("QTL_BASELINE", mean(PATCHVARS.getValue(QTL_ENV_VARIABLE)));
+	}
 }
 
 function (void)setupGlobalsFromPopVars(object<Dictionary>$ popvars){

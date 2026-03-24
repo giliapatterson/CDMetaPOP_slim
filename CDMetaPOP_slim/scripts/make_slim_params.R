@@ -250,7 +250,7 @@ for(run in 1:nruns){
                       mature_eqn_int_f = str_split_i(mature_eqn_int, "~", 1),
                       mature_eqn_int_m = str_split_i(mature_eqn_int, "~", 2))
   }
-  if(grep("~", popvars_new$mature_age[1])){
+  if(grepl("~", popvars_new$mature_age[1])){
     popvars_new <- mutate(popvars_new,
                           mature_age_f = str_split_i(mature_age, "~", 1),
                           mature_age_m = str_split_i(mature_age, "~", 1))
