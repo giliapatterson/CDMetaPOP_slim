@@ -8,7 +8,7 @@ initialize() {
 	// then the values of the default parameters will be overridden with the values sepcified
 	defaults = Dictionary(
 		"SEED", getSeed(), // random seed
-		"RUNVARS_FILE", '../../trout-and-frogs/fixed_initial_alleles/climate_change_McKenzie2/slim_output/slim_parameters/run7/RunVars_slim.csv', // File containing run info
+		"RUNVARS_FILE", '../../trout-and-frogs/fixed_initial_alleles/climate_change_McKenzie2/slim_output/slim_parameters/run9/RunVars_slim.csv', // File containing run info
 		//"RUNVARS_FILE", 'QTL_test/RunVars_slim.csv', // File containing run info
 		//"PARAM_FOLDER", "./", // Folder containing parameter files
 		"PARAM_FOLDER", "../../trout-and-frogs/fixed_initial_alleles/", // Folder containing parameter files
@@ -169,9 +169,6 @@ first(){
 		phenotypes = individuals.sumOfMutationsOfType(m2) + rnorm(length(individuals), mean = 0, sd = sqrt(QTL_VE)) + QTL_BASELINE;
 		individuals.setValuesVectorized("phenotype", phenotypes);
 	}
-	//print(sapply(sim.subpopulations, "mean(applyValue.individuals.getValue('phenotype'));"));
-	//print(sapply(sim.subpopulations, "var(applyValue.individuals.getValue('phenotype'));"));
-	//print(length(unique(sim.subpopulations.haplosomes.mutationsOfType(m2))));
 }
 
 STARTGENES first(){
@@ -575,9 +572,6 @@ late() {
 		kill = inds[runif(length(inds)) > psurvive];
 		print(length(kill) + " individuals killed");
 		sim.killIndividuals(kill);
-		//print(GrowthTemperatureBack);
-		//print(sapply(sim.subpopulations, "mean(applyValue.individuals.getValue('phenotype'));"));
-		//print(sapply(sim.subpopulations, "var(applyValue.individuals.getValue('phenotype'));"));
 	}
 }
 
@@ -631,6 +625,16 @@ late(){
 }
 
 late() {
+	ne_subpops = sim.subpopulations[sim.subpopulations.individualCount > 0];
+	print("Phenotypes: ");
+	print(sapply(ne_subpops, "mean(applyValue.individuals.getValue('phenotype'));"));
+	print("Additive genetic contribution: ");
+	print(sapply(ne_subpops, "mean(applyValue.individuals.haplosomes.sumOfMutationsOfType(m2)) + QTL_BASELINE;"));
+	print("Temperatures: ");
+	print(GrowthTemperatureBack[ne_subpops.id]);
+	//print(sapply(ne_subpops, "var(applyValue.individuals.getValue('phenotype'));"));
+	print("Mutations: ");
+	print(sapply(ne_subpops, "length(unique(applyValue.haplosomes.mutationsOfType(m2)));"));
 	if (sum(sim.subpopulations.individualCount) == 0){
 		writeFile(FINISHED, "Simulation extinct");
 		print("Simulation extinct in " + (clock() - start) + " seconds.");
