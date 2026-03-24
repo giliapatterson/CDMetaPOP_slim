@@ -75,13 +75,23 @@ where $a_ijh$ is the phenotyic effect of the allele at locus $i$, on the $h^{th}
 $$V_A = var\left(\sum_{h=1}^{2}\sum_{i=1}^{n}a_{ijh}\right)$$
 and the heritability of the trait is $V_A/(V_E + V_A)$. This model does not include dominance or interactions between genotype and environment.
 
-The simulation is initialized with no genetic variation and with a genome of length `genome_length`. At this point all individuals have the same phenotype, $B$. The user specifies the proportion of the genome where mutations that arise will affect the phenotype, `qtl_prop_genome`, as well as a mutation rate, `qtl_muterate`. When a new mutation arises in the quantitative trait portion of the genome, its phenotypic effect is drawn from the distribution of phenotypic effects specified by the user, `qtl_pheno_eff`. For example, if `qtl_pheno_eff = rnorm(1, 0, 5.0)`, then the phenotypic effect is drawn from a normal distribution with mean 0 and standard deviation 5.0. Mutations that arise in the remaining portion of the genome are neutral. The user also specifies a recombination rate for the genome, `qtl_recrate`. `qtl_muterate` and `qtl_recrate` can change over time, but `genome_length`, `qtl_prop_genome`, and `qtl_pheno_eff` cannot.
+The default behavior is for the simulation to be initialized with no genetic variation and with a genome of length `genome_length`. At this point all individuals have the same phenotype, $B$. The user specifies the proportion of the genome where mutations that arise will affect the phenotype, `qtl_prop_genome`, as well as a mutation rate, `qtl_muterate`. When a new mutation arises in the quantitative trait portion of the genome, its phenotypic effect is drawn from the distribution of phenotypic effects specified by the user, `qtl_pheno_eff`. For example, if `qtl_pheno_eff = rnorm(1, 0, 5.0)`, then the phenotypic effect is drawn from a normal distribution with mean 0 and standard deviation 5.0. Mutations that arise in the remaining portion of the genome are neutral. The user also specifies a recombination rate for the genome, `qtl_recrate`. `qtl_muterate` and `qtl_recrate` can change over time, but `genome_length`, `qtl_prop_genome`, and `qtl_pheno_eff` cannot. 
 
 Selection on the trait takes place immediately after dispersal, before the "Packing back" step. Selection takes place through excess mortality. The probability an individual dies in the selection step is determined by the deviation of its phenotype from the environment it experiences. The user specifies which environmental variable the phenotype is linked to in `qtl_env_variable`. `qtl_env_variable` must be the name of a column in the PatchVars file. The probability an individual dies is:
 $$f((P_j-\text{environment experienced}))/f(0)$$
 where $f$ is the PDF of a normal distribution with mean 0 and standard deviation $\sigma = $ `qtl_fit_sd`,
 
 $$f(x) = \frac{1}{\sigma\sqrt{2\pi}} \exp\left( -\frac{1}{2}\left(\frac{x}{\sigma}\right)^{2}\right)$$
+
+
+Users can change the way genotypes are initialized in two options.
+
+1. Choose a genotype for each patch by specifying `qtl_loci_initial` and `qtl_dpe_initial` for each patch in PatchVars. `qtl_loci_initial` is the number of loci underlying the trait (e.g. 100) and `qtl_dpe_initial` is the distribution of effect sizes for those loci. (e.g. 'rep(1/200, 100)'). All individuals in the patch have the same initial genotype.
+
+2. Specify `qtl_mutations_initial` in PopVars. If `qtl_mutations_initial` is specified, `qtl_mutations_initial` mutations are randomly added to the population with phenotypic effects drawn from `qtl_pheno_eff`.
+
+If both options are used, the initial mutations will be added to the initial genotypes for each patch.
+
 
 ### Parameters
 
