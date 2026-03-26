@@ -191,7 +191,7 @@ for(run in 1:nruns){
   if(genes_method == "file"){
      patchvars_used = c(patchvars_used, "genes_file_slim")
   }
-  if(has_name(patchvars, 'qtl_loci_initial')){
+  if(has_name(patchvars, 'qtl_loci_initial') & !has_name(popvars, 'genome')){
     patchvars_used = c(patchvars_used, 'qtl_dpe_initial', 'qtl_loci_initial')
   }
   
@@ -284,6 +284,18 @@ for(run in 1:nruns){
   if(has_name(popvars, "genome_length")){
     popvars_used <- c(popvars_used, "genome_length", "qtl_prop_genome", "qtl_pheno_eff", "qtl_env_variable",
                       "qtl_muterate", "qtl_recrate", "qtl_ve", "qtl_fit_sd")
+    if(has_name(popvars, "qtl_mutations_initial")){
+      popvars_used <- c(popvars_used, "qtl_mutations_initial")
+    }
+  }
+  # Genome file
+  if(has_name(popvars, "genome")){
+    genome <- read_csv(paste0(param_directory, popvars$genome[1]), show_col_types = FALSE)
+    genome_outfile <- paste0(output_directory, "genome.csv")
+    write_csv(genome, genome_outfile)
+    popvars_new$genome <- genome_outfile
+    popvars_used <- c(popvars_used, "genome", "qtl_prop_genome", "qtl_pheno_eff", "qtl_env_variable",
+                      "qtl_ve", "qtl_fit_sd")
     if(has_name(popvars, "qtl_mutations_initial")){
       popvars_used <- c(popvars_used, "qtl_mutations_initial")
     }
