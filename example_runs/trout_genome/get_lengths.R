@@ -13,10 +13,10 @@ trout_arms <- trout_contigs |> mutate(length = nchar(Consensus)) |>
 trout_chroms <- trout_arms |> group_by(Chromosome) |>
   reframe(Length = sum(Length))
 # Remove sex chromosome (29) and compute recombination rates for smaller chromosomes
-scale = 0.01
+scale = 0.1
 trout_genome <- trout_chroms |> mutate(recombination_rate = 3) |>
   mutate(Length = Length*scale, recombination_rate = recombination_rate/scale,
-         mutation_rate = 1e-8) |>
+         mutation_rate = 1e-7) |>
   filter(Chromosome != 29)
 # Write lengths to file
 write_csv(trout_genome,"climate_change_McKenzie/trout_genome.csv")
