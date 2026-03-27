@@ -1,3 +1,36 @@
+function (void)updatePlot(void)
+{
+	if (exists("slimgui"))
+	{
+		// Mutational effects
+		min_effect = min(EFFECTS);
+		max_effect = max(EFFECTS);
+		bins = 10;
+		bin_starts = min_effect + (0:(bins))*(max_effect - min_effect)/bins;
+		
+		i_vals = 0:(bins-1);
+		counts = sapply(i_vals, "sum(EFFECTS >= bin_starts[applyValue] & EFFECTS < bin_starts[applyValue+1]);");
+		x_vals = sapply(i_vals, "mean(bin_starts[c(applyValue, applyValue + 1)]);");
+		
+		plot = slimgui.createPlot("Mutation effects",
+			xrange=c(min_effect,max_effect), yrange=c(0,max(counts)),
+			xlab="effect", ylab="count");
+		
+		plot.lines(x_vals, counts);
+		plot.abline(v=0, color = 'black');
+		
+		// Phenotypes
+		inds = sim.subpopulations.individuals;
+		phenotypes = inds.getValue('phenotype');
+		env_variables = executeLambda(QTL_ENV_VARIABLE + ";")[inds.subpopulation.id];
+		plot = slimgui.createPlot("Phenotypes",
+			xrange=c(min(env_variables), max(env_variables)), yrange=c(min(phenotypes), max(phenotypes)),
+			xlab="environment", ylab="phenotype");
+		plot.points(env_variables, phenotypes);
+		
+	}
+}
+
 initialize() {
 	// Timing
 	defineGlobal("start", clock());
@@ -100,6 +133,7 @@ initialize() {
 			initializeRecombinationRate(rr*1e-8);
 			initializeGenomicElement(g2);
 		}
+		m2.convertToSubstitution = T;
 	}
 	if(NLOCI == 0 & QTL & !GENOME_FILE){
 		// Mutation linked to quantitative trait
@@ -112,7 +146,7 @@ initialize() {
 		// Mutation rates and recombination rates
 		initializeMutationRate(QTL_MUTERATE);
 		initializeRecombinationRate(QTL_RECRATE);
-		m2.convertToSubstitution = F;
+		m2.convertToSubstitution = T;
 	}
 	if(NLOCI > 0 & QTL & !GENOME_FILE){
 		// Original CDMetaPOP loci
@@ -130,7 +164,8 @@ initialize() {
 		initializeMutationRate(c(0, QTL_MUTERATE), c(NLOCI -1, asInteger(NLOCI + QTL_GEN_LENGTH - 1)));
 		initializeRecombinationRate(c(0.5, QTL_RECRATE), c(NLOCI -1, asInteger(NLOCI + QTL_GEN_LENGTH - 1)));
 		m1.convertToSubstitution = F;
-		m2.convertToSubstitution = F;
+		m2.convertToSubstitution = T;
+
 	}
 	if(NLOCI > 0 & !QTL & !GENOME_FILE){
 		initializeMutationType("m1", 0.5, "f", 0.0);
@@ -197,7 +232,7 @@ first(){
 			}
 		}
 		individuals = sim.subpopulations.individuals;
-		phenotypes = individuals.sumOfMutationsOfType(m2) + rnorm(length(individuals), mean = 0, sd = sqrt(QTL_VE)) + QTL_BASELINE;
+		phenotypes = individuals.sumOfMutationsOfType(m2) + sum(sim.substitutionsOfType(m2).selectionCoeff) + rnorm(length(individuals), mean = 0, sd = sqrt(QTL_VE)) + QTL_BASELINE;
 		individuals.setValuesVectorized("phenotype", phenotypes);
 	}
 }
@@ -385,7 +420,7 @@ reproduction(NULL, "F") {
 				offspring.tagL1 = F;
 				// QTL
 				if(QTL){
-					phenotypes = offspring.sumOfMutationsOfType(m2) + rnorm(length(offspring), mean = 0, sd = sqrt(QTL_VE)) + QTL_BASELINE;
+					phenotypes = offspring.sumOfMutationsOfType(m2) + sum(sim.substitutionsOfType(m2).selectionCoeff) + rnorm(length(offspring), mean = 0, sd = sqrt(QTL_VE)) + QTL_BASELINE;
 					offspring.setValuesVectorized("phenotype", phenotypes);
 				}
 			}
@@ -667,6 +702,8 @@ late() {
 		//print(sapply(ne_subpops, "var(applyValue.individuals.getValue('phenotype'));"));
 		print("Mutations: ");
 		print(sapply(ne_subpops, "length(unique(applyValue.haplosomes.mutationsOfType(m2)));"));
+		defineGlobal("EFFECTS", c(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2).selectionCoeff, sim.substitutionsOfType(m2).selectionCoeff));
+		updatePlot();
 	}
 	if (sum(sim.subpopulations.individualCount) == 0){
 		writeFile(FINISHED, "Simulation extinct");
@@ -1204,7 +1241,7 @@ function (void) writeQTLOutputOverall(string outfile, logical header){
 		Ve = var(sim.subpopulations.individuals.getValue('phenotype') - sim.subpopulations.individuals.sumOfMutationsOfType(m2));
 		heritability = Va/(Va + Ve);
 		qtl_alleles = length(unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2)));
-		avg_effect_size = mean(abs(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2).selectionCoeff));
+		avg_effect_size = mean(abs(c(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2).selectionCoeff, sim.substitutionsOfType(m2).selectionCoeff)));
 		chromosomes = sim.chromosomesOfType("A");
 		neutral_pi = mean(sapply(chromosomes, "calcPi(sim.subpopulations.haplosomesForChromosomes(applyValue), sim.subpopulations.haplosomesForChromosomes(applyValue).mutationsOfType(m3));"));
 		overall_pi = mean(sapply(chromosomes, "calcPi(sim.subpopulations.haplosomesForChromosomes(applyValue), c(sim.subpopulations.haplosomesForChromosomes(applyValue).mutationsOfType(m3), sim.subpopulations.haplosomesForChromosomes(applyValue).mutationsOfType(m2)));"));
@@ -1243,7 +1280,7 @@ function (void) writeQTLOutputSubpops(string outfile, logical header){
 			Ve = var(subpop.individuals.getValue('phenotype') - subpop.individuals.sumOfMutationsOfType(m2));
 			heritability = Va/(Va + Ve);
 			qtl_alleles = length(unique(subpop.individuals.haplosomes.mutationsOfType(m2)));
-			avg_effect_size = mean(abs(subpop.individuals.haplosomes.mutationsOfType(m2).selectionCoeff));
+			avg_effect_size = mean(abs(c(subpop.individuals.haplosomes.mutationsOfType(m2).selectionCoeff, sim.substitutionsOfType(m2).selectionCoeff)));
 			chromosomes = sim.chromosomesOfType("A");
 			neutral_pi = mean(sapply(chromosomes, "calcPi(subpop.haplosomesForChromosomes(applyValue), subpop.haplosomesForChromosomes(applyValue).mutationsOfType(m3));"));
 		overall_pi = mean(sapply(chromosomes, "calcPi(subpop.haplosomesForChromosomes(applyValue), c(subpop.haplosomesForChromosomes(applyValue).mutationsOfType(m3), subpop.haplosomesForChromosomes(applyValue).mutationsOfType(m2)));"));
