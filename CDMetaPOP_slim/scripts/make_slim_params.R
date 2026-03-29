@@ -203,19 +203,13 @@ for(run in 1:nruns){
   
   ## 2. Process matrices ##
   # If the climate changes over time, popvars can have multiple rows, one for each
-  # If the climate changes over time, popvars can have multiple rows, one for each
   # time step
   # Separate popvars by year
   popvars <- popvars |> separate_longer_delim(everything(), delim = "|")
   # If none of the variables in popvars change over time, replicate rows
   if(climate_change & nrow(popvars) == 1){popvars <- popvars |> slice(rep(1, length(climchangeyears)))}
   if(nrow(popvars) > 1 & nrow(popvars) != length(climchangeyears)){
-  # If none of the variables in popvars change over time, replicate rows
-  if(climate_change & nrow(popvars) == 1){popvars <- popvars |> slice(rep(1, length(climchangeyears)))}
-  if(nrow(popvars) > 1 & nrow(popvars) != length(climchangeyears)){
     print(glue("Error: not enough values specified for CDClimGen"))
-    print(glue("{length(climchangeyears)} values needed for at least one variable in PopVars"))
-    print(glue("Only {nrow(popvars)} specified"))
     print(glue("{length(climchangeyears)} values needed for at least one variable in PopVars"))
     print(glue("Only {nrow(popvars)} specified"))
   }
@@ -249,14 +243,6 @@ for(run in 1:nruns){
   }
   
   ## 3. Process remaining variables ##
-  popvars_new = mutate(popvars_new, mature_age = gsub("age", "", mature_default))
-  if(runvars$sizecontrol == 'Y'){
-    popvars_new  = mutate(popvars_new, mature_eqn_slope_f = str_split_i(mature_eqn_slope, "~", 1),
-                      mature_eqn_slope_m = str_split_i(mature_eqn_slope, "~", 2),
-                      mature_eqn_int_f = str_split_i(mature_eqn_int, "~", 1),
-                      mature_eqn_int_m = str_split_i(mature_eqn_int, "~", 2))
-  }
-  if(grepl("~", popvars_new$mature_age[1])){
   popvars_new = mutate(popvars_new, mature_age = gsub("age", "", mature_default))
   if(runvars$sizecontrol == 'Y'){
     popvars_new  = mutate(popvars_new, mature_eqn_slope_f = str_split_i(mature_eqn_slope, "~", 1),
