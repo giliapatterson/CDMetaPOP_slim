@@ -97,26 +97,17 @@ If both options are used, the initial mutations will be added to the initial gen
 
 The parameters for the quantitative trait model are specified in PopVars and are summarized below:
 
-The structure of the genome can be specified two ways. 
-
-1. Specify genome length, mutation rate, recombination rate separately.
-
-    `genome_length`: The total number of base pairs in the simulated genome. Cannot change over time.
-
-    `qtl_muterate`: Mutation rate. Can change over time, e.g. 1e-8|0.0|0.0.
-
-    `qtl_recrate`: Recombination rate. Can change over time.
-
-2. Specify a file containing length, recombination rate, and mutation rate for each chromosome in the genome.
-
-    `genome`: Path to file. This file contains four columns: `Chromosome`, `Length`, `recombination_rate`, and `mutation_rate`. These parameters cannot change over time.
-
+`genome_length`: The total number of base pairs in the simulated genome. Cannot change over time.
 
 `qtl_prop_genome`: The proportion of the genome where new mutations influence phenotype. In the remainder of the genome, mutations are neutral. Cannot change over time.
 
 `qtl_pheno_eff`: A piece of code for drawing the phenotypic effect of a new mutation. This code should return a single value. Any of the distribution functions from R will work, e.g. "rnorm(1, 0, 5.0)" or "rexp(1, 1)". So will sampling from a fixed set of phenotypic effects, e.g. "sample(c(-1, 0, 1), 1)". Cannot change over time.
 
 `qtl_env_variable`: A column name in PatchVars. It can be either an existing column used for other parts of the model, such as GrowthTemperatureBack, or a new column used only for the quantitative trait model. The column name specified cannot change over time, but the value of the environmental variable can. Use PatchVars and cdclimgen to do this. In addition, if GrowthTemperatureBack or GrowthTemperatureOut are used and the standard deviation of GrowthTemperatureBack or GrowthTemperatureOut is not 0, then the value of the environmental variable will vary randomly year to year. 
+
+`qtl_muterate`: Mutation rate. Can change over time, e.g. 1e-8|0.0|0.0.
+
+`qtl_recrate`: Recombination rate. Can change over time.
 
 `qtl_ve`: V_E. Can change over time.
 
@@ -171,23 +162,6 @@ To run the script, navigate to the `example_runs` directory (`cd example_runs`),
 ```
 bash climate_change_McKenzie/run_and_plot.sh
 ```
-
-### Modeling a genome with 32 chromosomes and thermal optimum as a quantitative trait
-
-```
-example_runs/trout_genome
-```
-
-This example runs the same model of evolution of thermal tolerance as the climate warms as above, but on a genome with 32 chromosomes. The genome is modeled after the Westslope cutthroat trout genome [1], excluding the sex chromosomes. 
-
-To run the script, navigate to the `example_runs/trout_genome` directory and run:
-
-```
-python ../../CDMetaPOP_slim/CDmetaPOP_slim.py -c8 -d climate_change_McKenzie -i RunVars.csv -o slim_output --no-filetime -s 300
-```
-
-1. Flores A-M, Christensen KA, Godin T, Palti Y, Campbell MR, Waldbieser GC, et al. The genome assembly of the westslope cutthroat trout, Oncorhynchus lewisi , reveals interspecific chromosomal rearrangements with the rainbow trout, Oncorhynchus mykiss. G3: Genes, Genomes, Genetics. 2025;15:jkaf064. https://doi.org/10.1093/g3journal/jkaf064.
-
 
 ### Coastal cutthroat trout in the McKenzie
 
