@@ -1,4 +1,4 @@
-function (void)updatePlot(void)
+function (void)updatePlotQTL(void)
 {
 	if (exists("slimgui"))
 	{
@@ -13,7 +13,7 @@ function (void)updatePlot(void)
 		x_vals = sapply(i_vals, "mean(bin_starts[c(applyValue, applyValue + 1)]);");
 		
 		plot = slimgui.createPlot("Mutation effects",
-			xrange=c(min_effect,max_effect), yrange=c(0,max(counts)),
+			xrange=c(min_effect - 1, max_effect + 1), yrange=c(0,max(counts) + 1),
 			xlab="effect", ylab="count");
 		
 		plot.lines(x_vals, counts);
@@ -30,6 +30,62 @@ function (void)updatePlot(void)
 		
 	}
 }
+function (void)updatePlotTPC(void)
+{
+	if (exists("slimgui"))
+	{
+		// Plot p0 through p4
+	
+		if(length(sim.subpopulations) <= 5) plot_subpops = sim.subpopulations[sim.subpopulations.individualCount != 0];
+		if(length(sim.subpopulations) > 5) plot_subpops = sim.subpopulations[0:4][sim.subpopulations[0:4].individualCount != 0];
+		
+		Topt = sapply(plot_subpops, "mean(applyValue.individuals.getValue('Topt'));");
+		epsilon = sapply(plot_subpops, "mean(applyValue.individuals.getValue('epsilon'));");
+		temperature = seq(-30, 30, by = 0.1);
+		plot = slimgui.createPlot("Thermal Performance Curve",
+					xrange=c(min(temperature), max(temperature)), yrange=c(0, 1.0),
+					xlab="temperature", ylab="performance");
+		colors = colors(length(plot_subpops), 'cividis');
+		for(i in seqAlong(epsilon)){
+			x = (temperature-Topt[i])/epsilon[i];
+			P = pmax(0.0, exp(x)*(1-x) - abs(epsilon[i]-EPSILON_BASELINE)*EPSILON_COST - abs(Topt[i]-TOPT_BASELINE)*TOPT_COST);
+			plot.lines(temperature, P, colors[i]);
+		}
+		
+		// Mutational effects for Topt
+		min_effect = min(TOPT_EFFECTS);
+		max_effect = max(TOPT_EFFECTS);
+		bins = 10;
+		bin_starts = min_effect + (0:(bins))*(max_effect - min_effect)/bins;
+		i_vals = 0:(bins-1);
+		counts = sapply(i_vals, "sum(TOPT_EFFECTS >= bin_starts[applyValue] & TOPT_EFFECTS < bin_starts[applyValue+1]);");
+		x_vals = sapply(i_vals, "mean(bin_starts[c(applyValue, applyValue + 1)]);");
+		
+		plot = slimgui.createPlot("Topt Mutation effects",
+			xrange=c(min_effect - 1, max_effect + 1), yrange=c(0,max(counts) + 1),
+			xlab="effect", ylab="count");
+		
+		plot.lines(x_vals, counts);
+		plot.abline(v=0, color = 'black');
+		
+		// Mutational effects for Epsilon
+		min_effect = min(EPSILON_EFFECTS);
+		max_effect = max(EPSILON_EFFECTS);
+		bins = 10;
+		bin_starts = min_effect + (0:(bins))*(max_effect - min_effect)/bins;
+		i_vals = 0:(bins-1);
+		counts = sapply(i_vals, "sum(EPSILON_EFFECTS >= bin_starts[applyValue] & EPSILON_EFFECTS < bin_starts[applyValue+1]);");
+		x_vals = sapply(i_vals, "mean(bin_starts[c(applyValue, applyValue + 1)]);");
+		
+		plot = slimgui.createPlot("Epsilon Mutation effects",
+			xrange=c(min_effect - 1, max_effect + 1), yrange=c(0,max(counts) + 1),
+			xlab="effect", ylab="count");
+		
+		plot.lines(x_vals, counts);
+		plot.abline(v=0, color = 'black');
+		
+	}
+}
 
 initialize() {
 	// Timing
@@ -41,7 +97,7 @@ initialize() {
 	// then the values of the default parameters will be overridden with the values sepcified
 	defaults = Dictionary(
 		"SEED", getSeed(), // random seed
-		"RUNVARS_FILE", 'trout_genome/climate_change_McKenzie/slim_output/slim_parameters/run1/RunVars_slim.csv', // File containing run info
+		"RUNVARS_FILE", 'trout_genome/thermal_performance/slim_output/slim_parameters/run1/RunVars_slim.csv', // File containing run info
 		//"RUNVARS_FILE", 'QTL_test/RunVars_slim.csv', // File containing run info
 		//"PARAM_FOLDER", "./", // Folder containing parameter files
 		"PARAM_FOLDER", 'trout_genome/', // Folder containing parameter files
@@ -54,6 +110,7 @@ initialize() {
 		"SCALEPOPSIZE", 1, // Decrease carrying capacities for testing
 		"NPATCHES", 'all' // Decrease number of patches for testing
 	);
+	
 	// Set up parameters
 	setupParams(defaults);
 	defineGlobal("PARAMS", defaults);
@@ -103,21 +160,54 @@ initialize() {
 		defineConstant("CLIMATECHANGE", F);
 	}
 	
-	
+	defineConstant("QTL_TPC", T);
+	defineConstant("TOPT_BASELINE", 10);
+	defineConstant("EPSILON_BASELINE", 2);
+	defineConstant("TOPT_VE", 0.1);
+	defineConstant("EPSILON_VE", 0.1);
+	defineConstant("TOPT_COST", 0.0);
+	defineConstant("EPSILON_COST", 0.05);
+	defineConstant("TOPT_PHENO_EFF", 'sample(c(-1, 1), 1)*rexp(1, 0.5)' + ";");
+	defineConstant("EPSILON_PHENO_EFF", 'sample(c(-1, 1), 1)*rexp(1, 0.1)' + ";");
+
 	
 	// Output
 	writeSubpopOutput(ALLPOPS_OUT, header = T);	
 	writeClassOutput(BYCLASS, header = T);
 	if(QTL){
-		writeQTLOutputOverall(QTL_OUT, header = T);
-		writeQTLOutputSubpops(QTL_SUBPOPS_OUT, header = T);
+		writeQTLOutputOverall(QTL_OUT, header = T, qtl_tpc = QTL_TPC);
+		writeQTLOutputSubpops(QTL_SUBPOPS_OUT, header = T, qtl_tpc = QTL_TPC);
 	}
 	
 	// Set up genome
 	// Genomic element g1 is neutral loci set up like the original CDMetaPOP
 	// Genomic element g2 is for quantitative trait
 	// Both are optional
-	if(GENOME_FILE & QTL){
+	if(GENOME_FILE & QTL & QTL_TPC){
+		// Genome from file
+		//Topt
+		initializeMutationType("m2", 0.5, "s", TOPT_PHENO_EFF);
+		// Neutral
+		initializeMutationType("m3", 0.5, "f", 0.0);
+		//CTmax
+		initializeMutationType("m4", 0.5, "s", EPSILON_PHENO_EFF);
+		initializeGenomicElementType("g2", c(m2, m3, m4), c(QTL_PROP_GENOME/2, 1.0-QTL_PROP_GENOME, QTL_PROP_GENOME/2));
+		genome = readCSV(PARAM_FOLDER + POPVARS.getValue('genome')[0]);
+		for(i in 0:(genome.nrow-1)){
+			row = genome.subsetRows(i);
+			id = row.getValue('Chromosome');
+			length = row.getValue('Length');
+			rr = row.getValue('recombination_rate');
+			mr = row.getValue('mutation_rate');
+			initializeChromosome(id, asInteger(length), type = "A", symbol = "c" + id);
+			initializeMutationRate(mr);
+			initializeRecombinationRate(rr*1e-8);
+			initializeGenomicElement(g2);
+		}
+		m2.convertToSubstitution = T;
+		m4.convertToSubstitution = T;
+	}
+	if(GENOME_FILE & QTL & !QTL_TPC){
 		// Genome from file
 		initializeMutationType("m2", 0.5, "s", QTL_PHENO_EFF);
 		initializeMutationType("m3", 0.5, "f", 0.0);
@@ -136,7 +226,7 @@ initialize() {
 		}
 		m2.convertToSubstitution = T;
 	}
-	if(NLOCI == 0 & QTL & !GENOME_FILE){
+	if(NLOCI == 0 & QTL & !GENOME_FILE & !QTL_TPC){
 		// Mutation linked to quantitative trait
 		initializeMutationType("m2", 0.5, "s", QTL_PHENO_EFF);
 		// Neutral mutations
@@ -149,7 +239,7 @@ initialize() {
 		initializeRecombinationRate(QTL_RECRATE);
 		m2.convertToSubstitution = T;
 	}
-	if(NLOCI > 0 & QTL & !GENOME_FILE){
+	if(NLOCI > 0 & QTL & !GENOME_FILE & !QTL_TPC){
 		// Original CDMetaPOP loci
 		initializeMutationType("m1", 0.5, "f", 0.0);
 		initializeGenomicElementType("g1", m1, 1.0);
@@ -168,7 +258,7 @@ initialize() {
 		m2.convertToSubstitution = T;
 
 	}
-	if(NLOCI > 0 & !QTL & !GENOME_FILE){
+	if(NLOCI > 0 & !QTL & !GENOME_FILE & !QTL_TPC){
 		initializeMutationType("m1", 0.5, "f", 0.0);
 		initializeGenomicElementType("g1", m1, 1.0);
 		initializeGenomicElement(g1, 0, NLOCI - 1);
@@ -217,7 +307,8 @@ first(){
 				mut_haplosomes = sample(sim.subpopulations.individuals.haplosomes, nmutations, replace = T);
 				mut_positions = sample(QTL_POSITIONS, nmutations, replace = T);
 				for(i in 0:(length(mut_haplosomes) - 1)){
-					mut_haplosomes[i].addNewDrawnMutation(m2, mut_positions[i]);
+					if(!QTL_TPC) mut_haplosomes[i].addNewDrawnMutation(m2, mut_positions[i]);
+					if(QTL_TPC) mut_haplosomes[i].addNewDrawnMutation(sample(c(m2, m4), 1), mut_positions[i]);
 				}
 			}
 		}
@@ -228,13 +319,22 @@ first(){
 				for(chrom in mut_chroms){
 					locus = sample(0:chrom.lastPosition, 1);
 					mut_hap = sample(sim.subpopulations.haplosomesForChromosomes(chrom), 1);
-					mut_hap.addNewDrawnMutation(m2, locus);
+					if(!QTL_TPC) mut_hap.addNewDrawnMutation(m2, locus);
+					if(QTL_TPC) mut_hap.addNewDrawnMutation(sample(c(m2, m4), 1), locus);
 				}
 			}
 		}
 		individuals = sim.subpopulations.individuals;
-		phenotypes = individuals.sumOfMutationsOfType(m2) + sum(sim.substitutionsOfType(m2).selectionCoeff) + rnorm(length(individuals), mean = 0, sd = sqrt(QTL_VE)) + QTL_BASELINE;
-		individuals.setValuesVectorized("phenotype", phenotypes);
+		if(!QTL_TPC){
+			phenotypes = individuals.sumOfMutationsOfType(m2) + sum(sim.substitutionsOfType(m2).selectionCoeff) + rnorm(length(individuals), mean = 0, sd = sqrt(QTL_VE)) + QTL_BASELINE;
+			individuals.setValuesVectorized("phenotype", phenotypes);
+		}
+		if(QTL_TPC){
+			Topts = individuals.sumOfMutationsOfType(m2) + sum(sim.substitutionsOfType(m2).selectionCoeff) + rnorm(length(individuals), mean = 0, sd = sqrt(TOPT_VE)) + TOPT_BASELINE;
+			epsilons = individuals.sumOfMutationsOfType(m4) + sum(sim.substitutionsOfType(m4).selectionCoeff) + rnorm(length(individuals), mean = 0, sd = sqrt(EPSILON_VE)) + 	EPSILON_BASELINE;
+			individuals.setValuesVectorized("Topt", Topts);
+			individuals.setValuesVectorized("epsilon", epsilons);
+		}
 	}
 }
 
@@ -403,7 +503,12 @@ reproduction(NULL, "F") {
 			if(length(potential_mates) > 0){
 				mate = sample(potential_mates, 1);
 				defineGlobal("EGGLAYEVENTS", EGGLAYEVENTS + 1);
-				pre_mort_neggs = num_eggs(individual);
+				// Thermal performance curve scales fecundity
+				if(!QTL_TPC) pre_mort_neggs = num_eggs(individual);
+				if(QTL_TPC){
+					tpc_scale = thermal_performance(GrowthTemperatureBack[subpop.id], individual.getValue('Topt'), individual.getValue('epsilon'), asFloat(TOPT_COST), asFloat(EPSILON_COST), asFloat(TOPT_BASELINE), asFloat(EPSILON_BASELINE));
+					pre_mort_neggs = asInteger(round(num_eggs(individual)*tpc_scale));
+				}
 				new_births = BIRTHS;
 				new_births[subpop.id] = BIRTHS[subpop.id] + pre_mort_neggs;
 				defineGlobal("BIRTHS", new_births);
@@ -420,9 +525,15 @@ reproduction(NULL, "F") {
 				offspring.tagL0 = F;
 				offspring.tagL1 = F;
 				// QTL
-				if(QTL){
+				if(QTL & !QTL_TPC){
 					phenotypes = offspring.sumOfMutationsOfType(m2) + sum(sim.substitutionsOfType(m2).selectionCoeff) + rnorm(length(offspring), mean = 0, sd = sqrt(QTL_VE)) + QTL_BASELINE;
 					offspring.setValuesVectorized("phenotype", phenotypes);
+				}
+				if(QTL & QTL_TPC){
+					Topts = offspring.sumOfMutationsOfType(m2) + sum(sim.substitutionsOfType(m2).selectionCoeff) + rnorm(length(offspring), mean = 0, sd = sqrt(TOPT_VE)) + TOPT_BASELINE;
+					epsilons = offspring.sumOfMutationsOfType(m4) + sum(sim.substitutionsOfType(m4).selectionCoeff) + rnorm(length(offspring), mean = 0, sd = sqrt(EPSILON_VE)) + EPSILON_BASELINE;
+					offspring.setValuesVectorized("Topt", Topts);
+					offspring.setValuesVectorized("epsilon", epsilons);
 				}
 			}
 		}
@@ -614,14 +725,7 @@ late(){
 	dispersers = individuals[runif(length(individuals)) < pdisperse];
 	print(length(dispersers) + " individuals dispersed.");
 	destinations = sample_subpops(dispersers, DISPERSELOCAL);
-//	for(source in unique(dispersers.subpopulation)){
-//		source_dispersers = dispersers[dispersers.subpopulation == source];
-//		print("Source: " + source.id + " Dispersers: " + length(source_dispersers));
-//		for (dest in unique(destinations)){
-//			source_dest = dispersers[dispersers.subpopulation == source & destinations == dest];
-//			print("     Destination: " + dest.id + " " + length(source_dest) + " " + length(source_dest)/length(source_dispersers));
-//		}
-//	}
+
 //	for(source in unique(dispersers.subpopulation)){
 //		source_dispersers = dispersers[dispersers.subpopulation == source];
 //		print("Source: " + source.id + " Dispersers: " + length(source_dispersers));
@@ -635,7 +739,7 @@ late(){
 
 late() {
 	// QTL selection
-	if(QTL){
+	if(QTL & !QTL_TPC){
 		print("QTL selection back");
 		inds = sim.subpopulations.individuals;
 		phenotypes = inds.getValue('phenotype');
@@ -646,6 +750,18 @@ late() {
 		fitnessFunctionMax = dnorm(0.0, 0.0, QTL_FIT_SD);
 		psurvive = dnorm(deviations, 0.0, QTL_FIT_SD)/fitnessFunctionMax;
 		//print(psurvive);
+		kill = inds[runif(length(inds)) > psurvive];
+		print(length(kill) + " individuals killed");
+		sim.killIndividuals(kill);
+	}
+	if(QTL & QTL_TPC){
+		print("Thermal performance curve selection back");
+		inds = sim.subpopulations.individuals;
+		Topts = inds.getValue('Topt');
+		epsilons = inds.getValue('epsilon');
+		patches = inds.subpopulation.id;
+		temperatures = GrowthTemperatureBack[patches];
+		psurvive = thermal_performance(temperatures, Topts, epsilons, asFloat(TOPT_COST), asFloat(EPSILON_COST), asFloat(TOPT_BASELINE), asFloat(EPSILON_BASELINE));
 		kill = inds[runif(length(inds)) > psurvive];
 		print(length(kill) + " individuals killed");
 		sim.killIndividuals(kill);
@@ -696,13 +812,13 @@ late(){
 	writeClassOutput(BYCLASS, header = F);
 	if(QTL){
 		print("Writing QTL output");
-		writeQTLOutputOverall(QTL_OUT, header = F);
-		writeQTLOutputSubpops(QTL_SUBPOPS_OUT, header = F);
+		writeQTLOutputOverall(QTL_OUT, header = F, qtl_tpc = QTL_TPC);
+		writeQTLOutputSubpops(QTL_SUBPOPS_OUT, header = F, qtl_tpc = QTL_TPC);
 	}
 }
 
 late() {
-	if(QTL){
+	if(QTL & !QTL_TPC){
 		ne_subpops = sim.subpopulations[sim.subpopulations.individualCount > 0];
 		print("Phenotypes: ");
 		print(sapply(ne_subpops, "mean(applyValue.individuals.getValue('phenotype'));"));
@@ -714,7 +830,24 @@ late() {
 		print("Mutations: ");
 		print(sapply(ne_subpops, "length(unique(applyValue.haplosomes.mutationsOfType(m2)));"));
 		defineGlobal("EFFECTS", c(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2).selectionCoeff, sim.substitutionsOfType(m2).selectionCoeff));
-		updatePlot();
+		updatePlotQTL();
+	}
+	if(QTL & QTL_TPC){
+		ne_subpops = sim.subpopulations[sim.subpopulations.individualCount > 0];
+		print("Topts: ");
+		print(sapply(ne_subpops, "mean(applyValue.individuals.getValue('Topt'));"));
+		print("Additive genetic contribution: ");
+		print(sapply(ne_subpops, "mean(applyValue.individuals.sumOfMutationsOfType(m2)) + TOPT_BASELINE;"));
+		print("Temperatures: ");
+		print(GrowthTemperatureBack[ne_subpops.id]);
+		//print(sapply(ne_subpops, "var(applyValue.individuals.getValue('phenotype'));"));
+		print("Mutations: ");
+	 	print(sapply(ne_subpops, "length(unique(applyValue.haplosomes.mutationsOfType(m2)));"));
+		print("Epsilons: ");
+		print(sapply(ne_subpops, "mean(applyValue.individuals.getValue('epsilon'));"));
+		defineGlobal("TOPT_EFFECTS", c(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2).selectionCoeff, sim.substitutionsOfType(m2).selectionCoeff));
+		defineGlobal("EPSILON_EFFECTS", c(sim.subpopulations.individuals.haplosomes.mutationsOfType(m4).selectionCoeff, sim.substitutionsOfType(m4).selectionCoeff));
+		updatePlotTPC();
 	}
 	if (sum(sim.subpopulations.individualCount) == 0){
 		writeFile(FINISHED, "Simulation extinct");
@@ -796,11 +929,11 @@ function (object<Subpopulation>)sample_subpops(object<Individual> individuals, f
 
 // Caluclate the new size of an individual for temperature-dependent growth
 function (float)grow_temperature(float current_size, integer age_class, float patch_temp, integer grow_days){
-	X_max = POPVARS.getValue("growth_temp_max");
-	X_CV = POPVARS.getValue("growth_temp_CV");
-	R0 = POPVARS.getValue("growth_R0");
-	Loo = POPVARS.getValue("growth_Loo");
-	t0 = POPVARS.getValue("growth_temp_t0");
+	X_max = asFloat(POPVARS.getValue("growth_temp_max"));
+	X_CV = asFloat(POPVARS.getValue("growth_temp_CV"));
+	R0 = asFloat(POPVARS.getValue("growth_R0"));
+	Loo = asFloat(POPVARS.getValue("growth_Loo"));
+	t0 = asFloat(POPVARS.getValue("growth_temp_t0"));
 	
 	int_R = -R0*dnorm(patch_temp, X_max, X_CV*X_max)/dnorm(X_max,  X_max, X_CV*X_max);
 	L_inc = Loo * (1-exp(int_R*(age_class + 1-t0)))* dnorm(patch_temp, X_max, X_CV*X_max)/dnorm(X_max,  X_max, X_CV*X_max);
@@ -886,7 +1019,14 @@ function (void)mature(object <Individual> individuals){
 	//print(mean(individuals.tagL0) + " prop matured");
 	return;
 }
-	
+
+// Thermal performance curve
+function (float)thermal_performance(float temperature, float Topt, float epsilon, float Topt_cost, float epsilon_cost, float Topt_baseline, float epsilon_baseline){
+	x = (temperature-Topt)/epsilon;
+   P = pmax(0.0, exp(x)*(1-x) - abs(Topt - Topt_baseline)*Topt_cost - abs(epsilon - epsilon_baseline)*epsilon_cost);
+   return(P);
+}
+
 // Packing
 function (integer)packing_survivors(object<Subpopulation> pack_subpop, string age_class_method){
 	Nj = pack_subpop.individualCount; // Current N
@@ -1237,8 +1377,9 @@ function (void)writeSubpopOutput(string outfile, logical header){
 		
 }
 
-function (void) writeQTLOutputOverall(string outfile, logical header){
-	overall_header = "year,K,popsize,phenotypic_variance,Va,Ve,heritability,qtl_alleles,avg_effect_size,neutral_pi,overall_pi";
+function (void) writeQTLOutputOverall(string outfile, logical header, logical qtl_tpc){
+	if(!qtl_tpc) overall_header = "year,K,popsize,phenotypic_variance,Va,Ve,heritability,qtl_alleles,avg_effect_size,neutral_pi,overall_pi";
+	if(qtl_tpc) overall_header = "year,K,popsize,Topt_variance,Topt_Va,Topt_Ve,Topt_heritability,Topt_alleles,Topt_avg_effect_size,epsilon_variance,epsilon_Va,epsilon_Ve,epsilon_heritability,epsilon_alleles,epsilon_avg_effect_size,neutral_pi,overall_pi";
 	if(header){
 		writeFile(outfile, overall_header);
 		return;
@@ -1246,7 +1387,7 @@ function (void) writeQTLOutputOverall(string outfile, logical header){
 	year = community.tick;
 	K = sum(PATCHKS);
 	popsize = sum(sim.subpopulations.individualCount);
-	if(popsize > 1){
+	if(popsize > 1 & !qtl_tpc){
 		phenotypic_variance = var(sim.subpopulations.individuals.getValue('phenotype'));
 		Va = calcVA(sim.subpopulations.individuals, m2);
 		Ve = var(sim.subpopulations.individuals.getValue('phenotype') - sim.subpopulations.individuals.sumOfMutationsOfType(m2));
@@ -1256,8 +1397,26 @@ function (void) writeQTLOutputOverall(string outfile, logical header){
 		chromosomes = sim.chromosomesOfType("A");
 		neutral_pi = mean(sapply(chromosomes, "calcPi(sim.subpopulations.haplosomesForChromosomes(applyValue), sim.subpopulations.haplosomesForChromosomes(applyValue).mutationsOfType(m3));"));
 		overall_pi = mean(sapply(chromosomes, "calcPi(sim.subpopulations.haplosomesForChromosomes(applyValue), c(sim.subpopulations.haplosomesForChromosomes(applyValue).mutationsOfType(m3), sim.subpopulations.haplosomesForChromosomes(applyValue).mutationsOfType(m2)));"));
+		print("QTL alleles: " + qtl_alleles);
 	}
-	else{
+	if(popsize > 1 & qtl_tpc){
+		Topt_variance = var(sim.subpopulations.individuals.getValue('Topt'));
+		Topt_Va = calcVA(sim.subpopulations.individuals, m2);
+		Topt_Ve = var(sim.subpopulations.individuals.getValue('Topt') - sim.subpopulations.individuals.sumOfMutationsOfType(m2));
+		Topt_heritability = Topt_Va/(Topt_Va + Topt_Ve);
+		Topt_alleles = length(unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2)));
+		Topt_avg_effect_size = mean(abs(c(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2).selectionCoeff, sim.substitutionsOfType(m2).selectionCoeff)));
+		epsilon_variance = var(sim.subpopulations.individuals.getValue('epsilon'));
+		epsilon_Va = calcVA(sim.subpopulations.individuals, m4);
+		epsilon_Ve = var(sim.subpopulations.individuals.getValue('epsilon') - sim.subpopulations.individuals.sumOfMutationsOfType(m4));
+		epsilon_heritability = epsilon_Va/(epsilon_Va + epsilon_Ve);
+		epsilon_alleles = length(unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(m4)));
+		epsilon_avg_effect_size = mean(abs(c(sim.subpopulations.individuals.haplosomes.mutationsOfType(m4).selectionCoeff, sim.substitutionsOfType(m4).selectionCoeff)));
+		chromosomes = sim.chromosomesOfType("A");
+		neutral_pi = mean(sapply(chromosomes, "calcPi(sim.subpopulations.haplosomesForChromosomes(applyValue), sim.subpopulations.haplosomesForChromosomes(applyValue).mutationsOfType(m3));"));
+		overall_pi = mean(sapply(chromosomes, "calcPi(sim.subpopulations.haplosomesForChromosomes(applyValue), c(sim.subpopulations.haplosomesForChromosomes(applyValue).mutationsOfType(m3), sim.subpopulations.haplosomesForChromosomes(applyValue).mutationsOfType(m2), sim.subpopulations.haplosomesForChromosomes(applyValue).mutationsOfType(m4)));"));
+	}
+	if(popsize == 0){
 		phenotypic_variance = 'NA';
 		Va = 'NA';
 		Ve = 'NA';
@@ -1266,14 +1425,26 @@ function (void) writeQTLOutputOverall(string outfile, logical header){
 		neutral_pi = 'NA';
 		overall_pi = 'NA';
 		avg_effect_size = 'NA';
+		Topt_variance = 'NA';
+		Topt_Va = 'NA';
+		Topt_Ve = 'NA';
+		Topt_heritability = 'NA';
+		Topt_alleles = 'NA';
+		Topt_effect_size = 'NA';
+		epsilon_variance = 'NA';
+		epsilon_Va = 'NA';
+		epsilon_Ve = 'NA';
+		epsilon_heritability = 'NA';
+		epsilon_alleles = 'NA';
+		epsilon_effect_size = 'NA';
 	}
 	overall_line = paste(executeLambda("c(" + overall_header + ");"), sep = ",");
 	writeFile(outfile, overall_line, append = T);
-	print("QTL alleles: " + qtl_alleles);
 	return;
 }
-function (void) writeQTLOutputSubpops(string outfile, logical header){
-	subpop_header = "year,PatchID,K,popsize,qtl_environment,avg_phenotype,phenotypic_variance,Va,Ve,heritability,qtl_alleles,avg_effect_size,neutral_pi,overall_pi";
+function (void) writeQTLOutputSubpops(string outfile, logical header, logical qtl_tpc){
+	if(!qtl_tpc) subpop_header = "year,PatchID,K,popsize,qtl_environment,avg_phenotype,phenotypic_variance,Va,Ve,heritability,qtl_alleles,avg_effect_size,neutral_pi,overall_pi";
+	if(qtl_tpc) subpop_header = "year,PatchID,K,popsize,temperature,avg_Topt,avg_epsilon,Topt_variance,epsilon_variance,Topt_Va,Topt_Ve,Topt_heritability,epsilon_Va,epsilon_Ve,epsilon_heritability,Topt_alleles,epsilon_alleles,Topt_avg_effect_size,epsilon_avg_effect_size,neutral_pi,overall_pi";
 	if(header){
 		writeFile(outfile, subpop_header);
 		return;
@@ -1283,8 +1454,9 @@ function (void) writeQTLOutputSubpops(string outfile, logical header){
 		PatchID = subpop.id;
 		K = PATCHKS[PatchID];
 		popsize = subpop.individualCount;
-		qtl_environment = executeLambda(QTL_ENV_VARIABLE + ";")[PatchID];
-		if(popsize > 1){
+		if(!qtl_tpc) qtl_environment = executeLambda(QTL_ENV_VARIABLE + ";")[PatchID];
+		if(qtl_tpc) temperature = GrowthTemperatureBack[PatchID];
+		if(popsize > 1 & !qtl_tpc){
 			avg_phenotype = mean(subpop.individuals.getValue('phenotype'));
 			phenotypic_variance = var(subpop.individuals.getValue('phenotype'));
 			Va = calcVA(subpop.individuals, m2);
@@ -1296,7 +1468,26 @@ function (void) writeQTLOutputSubpops(string outfile, logical header){
 			neutral_pi = mean(sapply(chromosomes, "calcPi(subpop.haplosomesForChromosomes(applyValue), subpop.haplosomesForChromosomes(applyValue).mutationsOfType(m3));"));
 		overall_pi = mean(sapply(chromosomes, "calcPi(subpop.haplosomesForChromosomes(applyValue), c(subpop.haplosomesForChromosomes(applyValue).mutationsOfType(m3), subpop.haplosomesForChromosomes(applyValue).mutationsOfType(m2)));"));
 		}
-		else{
+		if(popsize > 1 & qtl_tpc){
+			avg_Topt = mean(subpop.individuals.getValue('Topt'));
+			Topt_variance = var(subpop.individuals.getValue('Topt'));
+			Topt_Va = calcVA(subpop.individuals, m2);
+			Topt_Ve = var(subpop.individuals.getValue('Topt') - subpop.individuals.sumOfMutationsOfType(m2));
+			Topt_heritability = Topt_Va/(Topt_Va + Topt_Ve);
+			Topt_alleles = length(unique(subpop.individuals.haplosomes.mutationsOfType(m2)));
+			Topt_avg_effect_size = mean(abs(c(subpop.individuals.haplosomes.mutationsOfType(m2).selectionCoeff, sim.substitutionsOfType(m2).selectionCoeff)));
+			avg_epsilon = mean(subpop.individuals.getValue('epsilon'));
+			epsilon_variance = var(subpop.individuals.getValue('epsilon'));
+			epsilon_Va = calcVA(subpop.individuals, m4);
+			epsilon_Ve = var(subpop.individuals.getValue('epsilon') - subpop.individuals.sumOfMutationsOfType(m4));
+			epsilon_heritability = epsilon_Va/(epsilon_Va + epsilon_Ve);
+			epsilon_alleles = length(unique(subpop.individuals.haplosomes.mutationsOfType(m4)));
+			epsilon_avg_effect_size = mean(abs(c(subpop.individuals.haplosomes.mutationsOfType(m4).selectionCoeff, sim.substitutionsOfType(m4).selectionCoeff)));
+			chromosomes = sim.chromosomesOfType("A");
+			neutral_pi = mean(sapply(chromosomes, "calcPi(subpop.haplosomesForChromosomes(applyValue), subpop.haplosomesForChromosomes(applyValue).mutationsOfType(m3));"));
+		overall_pi = mean(sapply(chromosomes, "calcPi(subpop.haplosomesForChromosomes(applyValue), c(subpop.haplosomesForChromosomes(applyValue).mutationsOfType(m3), subpop.haplosomesForChromosomes(applyValue).mutationsOfType(m2),subpop.haplosomesForChromosomes(applyValue).mutationsOfType(m4)));"));
+		}
+		if(popsize == 0){
 			avg_phenotype = 'NA';
 			phenotypic_variance = 'NA';
 			Va = 'NA';
@@ -1306,6 +1497,20 @@ function (void) writeQTLOutputSubpops(string outfile, logical header){
 			avg_effect_size = 'NA';
 			neutral_pi = 'NA';
 			overall_pi = 'NA';
+			avg_Topt = 'NA';
+			Topt_variance = 'NA';
+			Topt_Va = 'NA';
+			Topt_Ve = 'NA';
+			Topt_heritability = 'NA';
+			Topt_alleles = 'NA';
+			Topt_avg_effect_size = 'NA';
+			avg_epsilon = 'NA';
+			epsilon_variance = 'NA';
+			epsilon_Va = 'NA';
+			Topt_Ve = 'NA';
+			epsilon_heritability = 'NA';
+			epsilon_alleles = 'NA';
+			epsilon_avg_effect_size = 'NA';
 		}
 		subpop_line = paste(executeLambda("c(" + subpop_header + ");"), sep = ",");
 		writeFile(outfile, subpop_line, append = T);

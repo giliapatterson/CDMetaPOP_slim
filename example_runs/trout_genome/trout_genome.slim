@@ -1,0 +1,112 @@
+// Keywords: multiple chromosomes
+function (void)updatePlot(void)
+{
+	if (exists("slimgui"))
+	{
+		
+		// Phenotypes
+		inds = sim.subpopulations.individuals;
+		Topt = mean(inds.getValue('Topt'));
+		epsilon = mean(inds.getValue('epsilon'));
+		temperature = seq(-30, 30, by = 0.1);
+		x = (temperature-Topt)/epsilon;
+      P = pmax(0.0, exp(x)*(1-x) - epsilon*0.01);
+		plot = slimgui.createPlot("Thermal Performance Curve",
+			xrange=c(min(temperature), max(temperature)), yrange=c(0, 1.0),
+			xlab="temperature", ylab="performance");
+		plot.lines(temperature, P);
+		
+	}
+}
+
+initialize() {
+	initializeSLiMModelType("nonWF");
+	initializeSex();
+	// Genome from file
+	//Topt
+	initializeMutationType("m2", 0.5, "s", 'sample(c(-1, 1), 1)*rexp(1, mu = 0.1);');
+	initializeMutationType("m3", 0.5, "f", 0.0);
+	//CTmax
+	initializeMutationType("m4", 0.5, "s", 'sample(c(-1, 1), 1)*rexp(1, mu = 0.1);');
+	defineConstant('QTL_PROP_GENOME', 0.8);
+	initializeGenomicElementType("g2", c(m2, m3, m4), c(QTL_PROP_GENOME/2, 1.0-QTL_PROP_GENOME, QTL_PROP_GENOME/2));
+	genome = readCSV('trout_genome.csv');
+	for(i in 0:(genome.nrow-1)){
+		row = genome.subsetRows(i);
+		id = row.getValue('Chromosome');
+		length = row.getValue('Length');
+		rr = row.getValue('recombination_rate');
+		mr = row.getValue('mutation_rate');
+		initializeChromosome(id, asInteger(length), type = "A", symbol = "c" + id);
+		initializeMutationRate(mr);
+		initializeRecombinationRate(rr*1e-8);
+		initializeGenomicElement(g2);
+	}
+	m2.convertToSubstitution = T;
+	m4.convertToSubstitution = T;
+}
+1 first() {
+	sim.addSubpop("p1", 1000); 
+	individuals = sim.subpopulations.individuals;
+	Topts = individuals.sumOfMutationsOfType(m2) + sum(sim.substitutionsOfType(m2).selectionCoeff) + rnorm(length(individuals), mean = 0, sd = 1) + 10;
+	individuals.setValuesVectorized("Topt", Topts);
+	epsilons = abs(individuals.sumOfMutationsOfType(m4) + sum(sim.substitutionsOfType(m4).selectionCoeff) + rnorm(length(individuals), mean = 0, sd = 1) + 0);
+	individuals.setValuesVectorized("epsilon", epsilons);
+	defineGlobal('MEAN_TEMP', 10);
+	temperature = rnorm(1, MEAN_TEMP, 0.1);
+	defineGlobal('TEMPERATURE', temperature);
+}
+reproduction(NULL, "F") {
+	potential_mates = subpop.subsetIndividuals(sex = "M");
+	if(exists("potential_mates")){
+		if(length(potential_mates) > 0){
+			mate = sample(potential_mates, 1);
+			tpc_scaling = max(0.0, thermal_performance(TEMPERATURE, individual.getValue('Topt'), individual.getValue('epsilon'))-individual.getValue('epsilon')*0.1);
+			//tpc_scaling = max(0.0, thermal_performance(TEMPERATURE, individual.getValue('Topt'), 2.0));
+			//noffspring = asInteger(round(tpc_scaling*5));
+			noffspring = 20;
+			offspring = subpop.addCrossed(individual, mate, count = noffspring);
+		}
+	}
+}
+
+modifyChild(){
+	child.setValue('Topt', child.sumOfMutationsOfType(m2) + sum(sim.substitutionsOfType(m2).selectionCoeff) + rnorm(1, mean = 0, sd = 1) + 10);
+	child.setValue('epsilon', abs(child.sumOfMutationsOfType(m4) + sum(sim.substitutionsOfType(m4).selectionCoeff) + rnorm(1, mean = 0, sd = 1) + 0));
+	return(T);
+}
+
+800:850 early(){
+	defineGlobal('MEAN_TEMP', MEAN_TEMP + 10/50);
+}
+early(){
+	p1.fitnessScaling = min(1000/p1.individualCount, 1.5);
+	temperature = rnorm(1, MEAN_TEMP, 0.1);
+	defineGlobal('TEMPERATURE', temperature);
+	individuals = sim.subpopulations.individuals;
+	individuals[individuals.age == 4].fitnessScaling = 0.0;
+	tpc = thermal_performance(temperature, individuals.getValue('Topt'), individuals.getValue('epsilon'));
+	// Penalty for high epsilon
+	cost = individuals.getValue('epsilon')*0.01;
+	individuals.fitnessScaling = pmax(tpc - cost, 0.0);
+}
+mutationEffect(m1) { return 1.0; }
+mutationEffect(m2) { return 1.0; }
+mutationEffect(m3) { return 1.0; }
+mutationEffect(m4) { return 1.0; }
+
+late(){
+	print("Tick: " + community.tick);
+	print("Temp: " + TEMPERATURE);
+	print("Topt: " + mean(p1.individuals.getValue('Topt')));
+	print("epsilon: " + mean(p1.individuals.getValue('epsilon')));
+	updatePlot();
+}
+
+1000 early() { sim.simulationFinished(); }
+
+function (float)thermal_performance(float temperature, float Topt, float epsilon){
+	x = (temperature-Topt)/epsilon;
+   P = pmax(0.0, exp(x)*(1-x));
+   return(P);
+}
