@@ -265,6 +265,11 @@ for(run in 1:nruns){
                           mature_age_f = str_split_i(mature_age, "~", 1),
                           mature_age_m = str_split_i(mature_age, "~", 1))
   }
+  if(!grepl("~", popvars_new$mature_age[1])){
+    popvars_new <- mutate(popvars_new,
+                          mature_age_f = mature_age,
+                          mature_age_m = mature_age)
+  }
   ## 4. Remove unused variables and write to file
   # First, set default genetic parameters if loci is not specified
   if(!has_name(popvars_new, 'loci')){

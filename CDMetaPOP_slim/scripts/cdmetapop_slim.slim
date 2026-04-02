@@ -144,6 +144,8 @@ initialize() {
 		defineConstant("MUTATION_OUTPUT_SUBPOP_IDS", output_split);
 		writeMutationalOrigins(MUTATION_OUTPUT_FILE, T, MUTATION_OUTPUT_SUBPOP_IDS);
 	}
+	// Placeholder
+	if(isNULL(RUNVARS.getValue('mutation_output_years'))) defineConstant("MUTATION_OUTPUT_TICKS", 1);
 	// Read in popvars for every year
 	defineConstant("POPVARS_ALL", readCSV(PARAM_FOLDER + RUNVARS.getValue("Popvars")[0]));
 	// Is a QTL implemented, and is genome length specified or is a genome file specified?
@@ -1433,7 +1435,7 @@ function (void) writeQTLOutputOverall(string outfile, logical header, logical qt
 		neutral_pi = mean(sapply(chromosomes, "calcPi(sim.subpopulations.haplosomesForChromosomes(applyValue), sim.subpopulations.haplosomesForChromosomes(applyValue).mutationsOfType(m3));"));
 		overall_pi = mean(sapply(chromosomes, "calcPi(sim.subpopulations.haplosomesForChromosomes(applyValue), c(sim.subpopulations.haplosomesForChromosomes(applyValue).mutationsOfType(m3), sim.subpopulations.haplosomesForChromosomes(applyValue).mutationsOfType(m2), sim.subpopulations.haplosomesForChromosomes(applyValue).mutationsOfType(m4)));"));
 	}
-	if(popsize == 0){
+	if(popsize <= 1){
 		phenotypic_variance = 'NA';
 		Va = 'NA';
 		Ve = 'NA';
@@ -1504,7 +1506,7 @@ function (void) writeQTLOutputSubpops(string outfile, logical header, logical qt
 			neutral_pi = mean(sapply(chromosomes, "calcPi(subpop.haplosomesForChromosomes(applyValue), subpop.haplosomesForChromosomes(applyValue).mutationsOfType(m3));"));
 		overall_pi = mean(sapply(chromosomes, "calcPi(subpop.haplosomesForChromosomes(applyValue), c(subpop.haplosomesForChromosomes(applyValue).mutationsOfType(m3), subpop.haplosomesForChromosomes(applyValue).mutationsOfType(m2),subpop.haplosomesForChromosomes(applyValue).mutationsOfType(m4)));"));
 		}
-		if(popsize == 0){
+		if(popsize <= 1){
 			avg_phenotype = 'NA';
 			phenotypic_variance = 'NA';
 			Va = 'NA';
