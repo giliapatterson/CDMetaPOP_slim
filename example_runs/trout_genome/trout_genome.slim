@@ -5,16 +5,22 @@ function (void)updatePlot(void)
 	{
 		
 		// Phenotypes
-		inds = sim.subpopulations.individuals;
-		Topt = mean(inds.getValue('Topt'));
-		epsilon = mean(inds.getValue('epsilon'));
 		temperature = seq(-30, 30, by = 0.1);
-		x = (temperature-Topt)/epsilon;
-      P = pmax(0.0, exp(x)*(1-x) - epsilon*0.01);
+		inds0 = p0.individuals;
+		Topt0 = mean(inds0.getValue('Topt'));
+		epsilon0 = mean(inds0.getValue('epsilon'));
+		x0 = (temperature-Topt0)/epsilon0;
+      P0 = pmax(0.0, exp(x0)*(1-x0) - epsilon0*0.01);
+      inds1 = p1.individuals;
+		Topt1 = mean(inds1.getValue('Topt'));
+		epsilon1 = mean(inds1.getValue('epsilon'));
+		x1 = (temperature-Topt1)/epsilon1;
+      P1 = pmax(0.0, exp(x1)*(1-x1) - epsilon1*0.01);
 		plot = slimgui.createPlot("Thermal Performance Curve",
 			xrange=c(min(temperature), max(temperature)), yrange=c(0, 1.0),
 			xlab="temperature", ylab="performance");
-		plot.lines(temperature, P);
+		plot.lines(temperature, P0);
+		plot.lines(temperature, P1);
 		
 	}
 }
@@ -46,14 +52,15 @@ initialize() {
 	m4.convertToSubstitution = T;
 }
 1 first() {
+	sim.addSubpop("p0", 1000); 
 	sim.addSubpop("p1", 1000); 
 	individuals = sim.subpopulations.individuals;
 	Topts = individuals.sumOfMutationsOfType(m2) + sum(sim.substitutionsOfType(m2).selectionCoeff) + rnorm(length(individuals), mean = 0, sd = 1) + 10;
 	individuals.setValuesVectorized("Topt", Topts);
 	epsilons = abs(individuals.sumOfMutationsOfType(m4) + sum(sim.substitutionsOfType(m4).selectionCoeff) + rnorm(length(individuals), mean = 0, sd = 1) + 0);
 	individuals.setValuesVectorized("epsilon", epsilons);
-	defineGlobal('MEAN_TEMP', 10);
-	temperature = rnorm(1, MEAN_TEMP, 0.1);
+	defineGlobal('MEAN_TEMP', c(8, 12));
+	temperature = rnorm(2, MEAN_TEMP, 0.1);
 	defineGlobal('TEMPERATURE', temperature);
 }
 reproduction(NULL, "F") {
@@ -61,7 +68,7 @@ reproduction(NULL, "F") {
 	if(exists("potential_mates")){
 		if(length(potential_mates) > 0){
 			mate = sample(potential_mates, 1);
-			tpc_scaling = max(0.0, thermal_performance(TEMPERATURE, individual.getValue('Topt'), individual.getValue('epsilon'))-individual.getValue('epsilon')*0.1);
+			tpc_scaling = max(0.0, thermal_performance(TEMPERATURE[subpop.id], individual.getValue('Topt'), individual.getValue('epsilon'))-individual.getValue('epsilon')*0.1);
 			//tpc_scaling = max(0.0, thermal_performance(TEMPERATURE, individual.getValue('Topt'), 2.0));
 			//noffspring = asInteger(round(tpc_scaling*5));
 			noffspring = 20;
@@ -80,12 +87,13 @@ modifyChild(){
 	defineGlobal('MEAN_TEMP', MEAN_TEMP + 10/50);
 }
 early(){
+	p0.fitnessScaling = min(1000/p0.individualCount, 1.5);
 	p1.fitnessScaling = min(1000/p1.individualCount, 1.5);
-	temperature = rnorm(1, MEAN_TEMP, 0.1);
+	temperature = rnorm(2, MEAN_TEMP, 0.1);
 	defineGlobal('TEMPERATURE', temperature);
 	individuals = sim.subpopulations.individuals;
 	individuals[individuals.age == 4].fitnessScaling = 0.0;
-	tpc = thermal_performance(temperature, individuals.getValue('Topt'), individuals.getValue('epsilon'));
+	tpc = thermal_performance(temperature[individuals.subpopulation.id], individuals.getValue('Topt'), individuals.getValue('epsilon'));
 	// Penalty for high epsilon
 	cost = individuals.getValue('epsilon')*0.01;
 	individuals.fitnessScaling = pmax(tpc - cost, 0.0);
@@ -96,11 +104,23 @@ mutationEffect(m3) { return 1.0; }
 mutationEffect(m4) { return 1.0; }
 
 late(){
+	nmigrants0 = asInteger(round(p0.individualCount*0.01));
+	p1.takeMigrants(sample(p0.individuals, nmigrants0));
+	nmigrants1 = asInteger(round(p1.individualCount*0.01));
+	p0.takeMigrants(sample(p1.individuals, nmigrants1));
+
+}
+
+late(){
 	print("Tick: " + community.tick);
 	print("Temp: " + TEMPERATURE);
-	print("Topt: " + mean(p1.individuals.getValue('Topt')));
-	print("epsilon: " + mean(p1.individuals.getValue('epsilon')));
+	print("Topt: " + mean(p0.individuals.getValue('Topt')) + "," + mean(p1.individuals.getValue('Topt')));
+	print("epsilon: " + mean(p0.individuals.getValue('epsilon')) + "," + mean(p1.individuals.getValue('epsilon')));
 	updatePlot();
+
+}
+800:1000 late(){
+	print("Mutations originating in subpop: " + mean(c(p0.individuals.haplosomes.mutations.subpopID == 0, sim.substitutions.subpopID == 0)) + "," + mean(c(p1.individuals.haplosomes.mutations.subpopID == 1, sim.substitutions.subpopID == 1)));
 }
 
 1000 early() { sim.simulationFinished(); }

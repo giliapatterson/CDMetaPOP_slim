@@ -169,6 +169,10 @@ initialize() {
 	defineConstant("EPSILON_COST", 0.05);
 	defineConstant("TOPT_PHENO_EFF", 'sample(c(-1, 1), 1)*rexp(1, 0.5)' + ";");
 	defineConstant("EPSILON_PHENO_EFF", 'sample(c(-1, 1), 1)*rexp(1, 0.1)' + ";");
+	defineConstant("MUTATION_OUTPUT_TICKS", 1:1000);
+	defineConstant("MUTATION_OUTPUT_SUBPOP_IDS", c(0, 1, 2, 3, 4));
+	defineConstant("MUTATION_OUTPUT_FILE", "slimgui_testing/mutation_origins.csv");
+	writeMutationalOrigins(MUTATION_OUTPUT_FILE, T, MUTATION_OUTPUT_SUBPOP_IDS);
 
 	
 	// Output
@@ -817,6 +821,11 @@ late(){
 	}
 }
 
+MUTATION_OUTPUT_TICKS late(){
+	if(QTL_TPC){
+		writeMutationalOrigins(MUTATION_OUTPUT_FILE, F, MUTATION_OUTPUT_SUBPOP_IDS);
+	}
+}
 late() {
 	if(QTL & !QTL_TPC){
 		ne_subpops = sim.subpopulations[sim.subpopulations.individualCount > 0];
@@ -1515,6 +1524,55 @@ function (void) writeQTLOutputSubpops(string outfile, logical header, logical qt
 		subpop_line = paste(executeLambda("c(" + subpop_header + ");"), sep = ",");
 		writeFile(outfile, subpop_line, append = T);
 	}
+	return;
+}
+
+function (float) calcAdditiveOriginIndividual(io<Individual> individual, integer origin_subpop_id, io<MutationType>$ mutType){
+	all_muts = c(individual.haplosomes.mutationsOfType(mutType));
+	origin_muts = all_muts[all_muts.subpopID == origin_subpop_id];
+	origin_subs = sim.substitutionsOfType(m4)[sim.substitutionsOfType(m4).subpopID == 0];
+	sum_of_muts  = sum(c(origin_muts.selectionCoeff, origin_subs.selectionCoeff));
+	return(sum_of_muts);
+}
+
+function (float) calcAdditiveContributionOrigin(integer focal_subpop_id, integer origin_subpop_id, io<MutationType>$ mutType){
+	focal_subpop = sim.subpopulations[focal_subpop_id];
+	additive_contributions = sapply(focal_subpop.individuals, "calcAdditiveOriginIndividual(applyValue, origin_subpop_id, mutType);");
+	return(additive_contributions);
+}
+
+function (string) mutationalOrigins(string header_string, integer focal_subpop_id){
+	focal_subpop = sim.subpopulations[focal_subpop_id];
+	if(focal_subpop.individualCount > 0 & length(focal_subpop.individuals.haplosomes.mutations) > 0){
+		origin_subpop = unique(focal_subpop.individuals.haplosomes.mutations.subpopID);
+		Topt_count = sapply(origin_subpop, "sum(c(focal_subpop.individuals.haplosomes.mutationsOfType(m2).subpopID, sim.substitutionsOfType(m2).subpopID) == applyValue);");
+		epsilon_count = sapply(origin_subpop, "sum(c(focal_subpop.individuals.haplosomes.mutationsOfType(m4).subpopID, sim.substitutionsOfType(m4).subpopID) == applyValue);");
+		neutral_count = sapply(origin_subpop, "sum(c(focal_subpop.individuals.haplosomes.mutationsOfType(m3).subpopID, sim.substitutionsOfType(m3).subpopID) == applyValue);");
+		Topt_mean_contribution = sapply(origin_subpop, "mean(calcAdditiveContributionOrigin(focal_subpop_id,applyValue, m2));");
+		epsilon_mean_contribution = sapply(origin_subpop, "mean(calcAdditiveContributionOrigin(focal_subpop_id,applyValue, m4));");
+		Topt_VA = sapply(origin_subpop, "var(calcAdditiveContributionOrigin(focal_subpop_id,applyValue, m2));");
+		epsilon_VA = sapply(origin_subpop, "var(calcAdditiveContributionOrigin(focal_subpop_id,applyValue, m4));");
+		origin_temp = GrowthTemperatureBack[origin_subpop];
+		tick = rep(community.tick, length(origin_subpop));
+		subpop = rep(focal_subpop.id, length(origin_subpop));
+		subpop_temp = rep(GrowthTemperatureBack[focal_subpop.id], length(origin_subpop));
+		lines = apply(executeLambda('matrix(c(' + header_string + '),nrow = length(origin_subpop));'), 0, "paste(applyValue, sep = ',');");
+		add = paste(lines, sep = "\n");
+	}
+	else{
+		add = NULL;
+	}
+	return(add);
+}
+
+function (void) writeMutationalOrigins(string outfile, logical header, integer focal_subpop_ids){
+	header_string = "tick,subpop,subpop_temp,origin_subpop,origin_temp,Topt_count,epsilon_count,neutral_count,Topt_mean_contribution,epsilon_mean_contribution,Topt_VA,epsilon_VA";
+	if(header){
+		writeFile(outfile, header_string);
+		return;
+	}
+	lines = sapply(focal_subpop_ids, "mutationalOrigins(header_string, applyValue);");
+	writeFile(outfile, lines, append = T);
 	return;
 }
 
