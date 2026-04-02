@@ -106,6 +106,7 @@ initialize() {
 		"BYCLASS", "slimgui_testing/summary_classAllTime.csv",
 		"QTL_OUT", "slimgui_testing/QTL_overall.csv",
 		"QTL_SUBPOPS_OUT", "slimgui_testing/QTL_subpops.csv",
+		"MUTATION_OUTPUT_FILE", "slimgui_testing/mutation_origins.csv",
 		"FINISHED", "slimgui_testing/finished.txt",
 		"SCALEPOPSIZE", 1, // Decrease carrying capacities for testing
 		"NPATCHES", 'all' // Decrease number of patches for testing
@@ -135,12 +136,22 @@ initialize() {
 	if(length(output_split) == 1){
 		defineConstant("OUTPUT_TICKS", rev(seq(RUNTIME, 1, by = -output_split)));
 	}
+	//Output ticks and focal subpopulations for origin of mutations
+	if(!isNULL(RUNVARS.getValue('mutation_output_years'))){
+		output_split = asInteger(strsplit(asString(RUNVARS.getValue("mutation_output_years")), "|"));
+		defineConstant("MUTATION_OUTPUT_TICKS", output_split);
+		output_split = asInteger(strsplit(asString(RUNVARS.getValue("mutation_output_subpops")), "|"));
+		defineConstant("MUTATION_OUTPUT_SUBPOP_IDS", output_split);
+		writeMutationalOrigins(MUTATION_OUTPUT_FILE, T, MUTATION_OUTPUT_SUBPOP_IDS);
+	}
 	// Read in popvars for every year
 	defineConstant("POPVARS_ALL", readCSV(PARAM_FOLDER + RUNVARS.getValue("Popvars")[0]));
 	// Is a QTL implemented, and is genome length specified or is a genome file specified?
 	if(!isNULL(POPVARS_ALL.getValue("genome_length")) | !isNULL(POPVARS_ALL.getValue("genome"))) defineConstant("QTL", T); else defineConstant("QTL", F);
 	if(!isNULL(POPVARS_ALL.getValue("genome"))) defineConstant("GENOME_FILE", T); else defineConstant("GENOME_FILE", F);
-	
+	// Is the thermal performance curve modeled?
+	if(!isNULL(POPVARS_ALL.getValue("Topt_pheno_eff"))) defineConstant("QTL_TPC", T); else defineConstant("QTL_TPC", F);
+
 	// Initialize with year 0
 	defineGlobal("POPVARS", POPVARS_ALL.subsetRows(0));
 	// Set up params that can't change
@@ -159,21 +170,6 @@ initialize() {
 		defineConstant("CHANGE_YEARS", 1);
 		defineConstant("CLIMATECHANGE", F);
 	}
-	
-	defineConstant("QTL_TPC", T);
-	defineConstant("TOPT_BASELINE", 10);
-	defineConstant("EPSILON_BASELINE", 2);
-	defineConstant("TOPT_VE", 0.1);
-	defineConstant("EPSILON_VE", 0.1);
-	defineConstant("TOPT_COST", 0.0);
-	defineConstant("EPSILON_COST", 0.05);
-	defineConstant("TOPT_PHENO_EFF", 'sample(c(-1, 1), 1)*rexp(1, 0.5)' + ";");
-	defineConstant("EPSILON_PHENO_EFF", 'sample(c(-1, 1), 1)*rexp(1, 0.1)' + ";");
-	defineConstant("MUTATION_OUTPUT_TICKS", 1:1000);
-	defineConstant("MUTATION_OUTPUT_SUBPOP_IDS", c(0, 1, 2, 3, 4));
-	defineConstant("MUTATION_OUTPUT_FILE", "slimgui_testing/mutation_origins.csv");
-	writeMutationalOrigins(MUTATION_OUTPUT_FILE, T, MUTATION_OUTPUT_SUBPOP_IDS);
-
 	
 	// Output
 	writeSubpopOutput(ALLPOPS_OUT, header = T);	
@@ -823,6 +819,7 @@ late(){
 
 MUTATION_OUTPUT_TICKS late(){
 	if(QTL_TPC){
+		print("Writing origin of mutations");
 		writeMutationalOrigins(MUTATION_OUTPUT_FILE, F, MUTATION_OUTPUT_SUBPOP_IDS);
 	}
 }
@@ -1240,13 +1237,24 @@ function (void)setupConstantsFromPopVars(object<Dictionary>$ popvars)
 	}
 	//print(NLOCI);
 	
-	if(QTL){
+	if(QTL & !QTL_TPC){
 		// Set up QTL
 		defineConstant("QTL_GEN_LENGTH", popvars.getValue('genome_length'));
 		defineConstant("QTL_PROP_GENOME", popvars.getValue('qtl_prop_genome'));
 		defineConstant("QTL_PHENO_EFF", popvars.getValue('qtl_pheno_eff') + ";");
 		defineConstant("QTL_ENV_VARIABLE", popvars.getValue('qtl_env_variable'));
 		defineConstant("QTL_BASELINE", mean(PATCHVARS.getValue(QTL_ENV_VARIABLE)));
+	}
+	if(QTL_TPC){
+		defineConstant("QTL_PROP_GENOME", popvars.getValue('qtl_prop_genome'));
+		defineConstant("TOPT_BASELINE", popvars.getValue('Topt_baseline'));
+		defineConstant("EPSILON_BASELINE", popvars.getValue('epsilon_baseline'));
+		defineConstant("TOPT_VE", popvars.getValue('Topt_VE'));
+		defineConstant("EPSILON_VE", popvars.getValue('epsilon_VE'));
+		defineConstant("TOPT_COST", popvars.getValue('Topt_cost'));
+		defineConstant("EPSILON_COST", popvars.getValue('epsilon_cost'));
+		defineConstant("TOPT_PHENO_EFF", popvars.getValue('Topt_pheno_eff') + ";");
+		defineConstant("EPSILON_PHENO_EFF", popvars.getValue('epsilon_pheno_eff') + ";");
 	}
 }
 

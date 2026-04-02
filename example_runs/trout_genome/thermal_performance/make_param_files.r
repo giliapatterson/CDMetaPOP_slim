@@ -13,12 +13,8 @@ dir.create(file.path(datadir), showWarnings = FALSE)
 # All movement is through dispersal
 # If an individual disperses they can't stay in their natal patch
 dispersal_prob_vals = 0.01
-# Test low and high Ve
-VE_vals = 1.0
-# Test low and high phenotypic effects
-qtl_pheno_effs = 'sample(c(-1,1), 1)*rexp(1, mu = 0.1)'
 # Test age and size control
-sizecontrol_vals = 'Y'
+sizecontrol_vals = 'N'
 
 mcruns = 1 # Number of runs for each parameter
 
@@ -51,11 +47,9 @@ patch_is <- sort(sample(1:125, npatches, replace = FALSE))
 ## Making RunVars file
 gridformat = 'genalex' # Output for alleles
 
-# Write to file
 runvars_df <- tibble(Popvars = Popvars_names,sizecontrol = sizecontrol_vals,mcruns,runtime,output_years,gridformat,cdclimgentime,
-                     dispersal_prob = dispersal_prob_vals, VE = VE_vals, qtl_pheno_sd = qtl_pheno_effs_sd)
-write_csv(runvars_df, paste0(datadir, "RunVars.csv"))
-
+                     dispersal_prob = dispersal_prob_vals, mutation_output_years = NA,
+                     mutation_output_subpops = NA)
 ## ClassVars
 classvars_file <- "ClassVars.csv"
 
@@ -86,7 +80,6 @@ for (i in 1:length(dispersal_prob_vals)){
   
   ## Making PopVars and PatchVars ##
   dispersal_prob_val <- dispersal_prob_vals[i]
-  VE <- VE_vals[i]
   popvars_filename <- Popvars_names[i]
   xyfilename = Patchvars_names[i]
   
@@ -122,45 +115,17 @@ for (i in 1:length(dispersal_prob_vals)){
   offno = '2' # Poisson draw from mean offspring number
   Egg_Mortality = 0 # Population level egg mortality
   
-  # Alleles from original CDMetaPOP
-  startGenes = 0 # What time to start genetics
-  loci = 0 # Number of loci
-  alleles = 2 # Number of alleles per locus - 1
-  muterate = 0.0001 # Mutation rate
-  mutationtype = 'random' # Mutation model (random means all alleles can mutate to other alleles)
-  
   ## QTL variables
   genome = 'trout_genome.csv'
   qtl_prop_genome = 0.5
-  qtl_pheno_eff = qtl_pheno_effs[i]
-  qtl_env_variable = 'GrowthTemperatureBack'
-  qtl_ve = VE
-  qtl_fit_sd = 1.0
-  
-  if(sizecontrol == 'Y'){
-    popvars_df <- tibble(xyfilename,
-                         mate_cdmat,matemoveno,migrateout_cdmat, migrateback_cdmat,
-                        stray_cdmat,disperseLocal_cdmat,
-                        mature_default,mature_eqn_slope,mature_eqn_int,offno,
-                        Egg_Mean_ans,Egg_Mean_par1,Egg_Mean_par2,Egg_Mortality,
-                        startGenes,loci,alleles,muterate,mutationtype,
-                        growth_Loo,growth_R0,growth_temp_max,growth_temp_CV,growth_temp_t0,
-                        popmodel,popmodel_par1,
-                        genome, qtl_prop_genome, qtl_pheno_eff, qtl_env_variable,
-                        qtl_ve, qtl_fit_sd)
-  }
-  if(sizecontrol == 'N'){
-    popvars_df <- tibble(xyfilename,
-                         mate_cdmat,matemoveno,migrateout_cdmat, migrateback_cdmat,
-                         stray_cdmat,disperseLocal_cdmat,
-                         mature_default,offno,
-                         Egg_Mortality,
-                         startGenes,loci,alleles,muterate,mutationtype,
-                         popmodel,popmodel_par1,
-                         genome, qtl_prop_genome, qtl_pheno_eff, qtl_env_variable,
-                         qtl_ve, qtl_fit_sd)
-  }
-  write_csv(popvars_df, paste0(datadir, popvars_filename))
+  Topt_baseline = 10.0
+  epsilon_baseline = 2.0
+  Topt_VE = 1.0
+  epsilon_VE = 0.1
+  Topt_cost = 0.01
+  epsilon_cost = 0.05
+  Topt_pheno_eff = 'sample(c(-1,1), 1)*rexp(1, mu = 0.1)'
+  epsilon_pheno_eff = 'sample(c(-1,1), 1)*rexp(1, mu = 0.1)'
   
   ## Making patchvars file
   # Read in big patches and convert to small
@@ -173,6 +138,7 @@ for (i in 1:length(dispersal_prob_vals)){
   X = patches$X
   Y = patches$Y
   PatchID = 1:num_patches # Unique patch ids
+  patches$id = PatchID
   
   # Carrying capacity
   K = rep(round(Ntotal/num_patches), num_patches)
@@ -215,7 +181,6 @@ for (i in 1:length(dispersal_prob_vals)){
   patchvars_df <- tibble(PatchID,X,Y,K,'K StDev' = KStDev,N0,
                          'Natal Grounds' = NatalGrounds,
                          'Migration Grounds' = MigrationGrounds,
-                         'Genes Initialize' = GenesInitialize,
                          'Class Vars' = ClassVars,
                          'Mortality Out %' = MortalityOut,
                          'Mortality Back' = MortalityBack,
@@ -229,7 +194,67 @@ for (i in 1:length(dispersal_prob_vals)){
                          GrowthTemperatureBack,GrowthTemperatureBackStDev,
                          GrowDaysBack,GrowDaysBackStDev)
   write_csv(patchvars_df, paste0(datadir, xyfilename))
+  
+  # Years to write out origin of mutations 
+  mutation_output_years = paste0(c(1, Tdelta, Tdelta + change_years, runtime - 1), collapse = "|")
+  # Focal subpops for mutation origins
+  # Pick subpops with initial temperatures evenly spaced
+  nsubpops = 5
+  quantiles = quantile(patches$mean_temp, probs = seq(0, 1, length.out = nsubpops))
+  mutation_output_subpops = patches |> expand_grid(q_temp = quantiles) |>
+    mutate(d_from_q = abs(mean_temp - q_temp)) |>
+    group_by(id) |>
+    filter(d_from_q == min(d_from_q)) |>
+    group_by(q_temp) |>
+    filter(d_from_q == min(d_from_q)) |>
+    group_by(q_temp) |>
+    summarize(id = sample(id, 1)) |>
+    pull(id) |>
+    unique() |>
+    paste(collapse = "|")
+  runvars_df$mutation_output_years[i] = mutation_output_years
+  runvars_df$mutation_output_subpops[i] = mutation_output_subpops
+    
+  if(sizecontrol == 'Y'){
+    popvars_df <- tibble(xyfilename,
+                         mate_cdmat,matemoveno,migrateout_cdmat, migrateback_cdmat,
+                         stray_cdmat,disperseLocal_cdmat,
+                         mature_default,mature_eqn_slope,mature_eqn_int,offno,
+                         Egg_Mean_ans,Egg_Mean_par1,Egg_Mean_par2,Egg_Mortality,
+                         growth_Loo,growth_R0,growth_temp_max,growth_temp_CV,growth_temp_t0,
+                         popmodel,popmodel_par1,
+                         genome, 
+                         qtl_prop_genome,
+                         Topt_baseline,
+                         epsilon_baseline,
+                         Topt_VE,
+                         epsilon_VE,
+                         Topt_cost,
+                         epsilon_cost,
+                         Topt_pheno_eff,
+                         epsilon_pheno_eff)
+  }
+  if(sizecontrol == 'N'){
+    popvars_df <- tibble(xyfilename,
+                         mate_cdmat,matemoveno,migrateout_cdmat, migrateback_cdmat,
+                         stray_cdmat,disperseLocal_cdmat,
+                         mature_default,offno,
+                         Egg_Mortality,
+                         popmodel,popmodel_par1,
+                         genome, 
+                         qtl_prop_genome,
+                         Topt_baseline,
+                         epsilon_baseline,
+                         Topt_VE,
+                         epsilon_VE,
+                         Topt_cost,
+                         epsilon_cost,
+                         Topt_pheno_eff,
+                         epsilon_pheno_eff)
+  }
+  write_csv(popvars_df, paste0(datadir, popvars_filename))
 }
+write_csv(runvars_df, paste0(datadir, "RunVars.csv"))
 
 
 ## Make ClassVars

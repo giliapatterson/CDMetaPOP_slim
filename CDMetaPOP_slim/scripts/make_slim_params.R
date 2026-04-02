@@ -23,21 +23,21 @@ parser <- ArgumentParser()
 parser$add_argument(
     "-d",
     "--parameter_directory",
-    default = '../../example_runs/climate_testing_example/',
+    default = '../../example_runs/trout_genome/thermal_performance/',
     help = "Directory containing CDMetaPOP input files"
 )
 
 parser$add_argument(
     "-r",
     "--runvars_file_name",
-    default = '../../example_runs/climate_testing_example/RunVars.csv',
+    default = '../../example_runs/trout_genome/thermal_performance/RunVars.csv',
     help = "Name of RunVars file for CDMetaPOP"
 )
 
 parser$add_argument(
     "-o",
     "--output_directory",
-    default = '../../example_runs/climate_testing_example/slim_test_params/',
+    default = '../../example_runs/trout_genome/thermal_performance/slim_parameters_test/',
     help = "Directory for SLiM input files"
 )
 
@@ -66,6 +66,9 @@ for(run in 1:nruns){
   if(grepl("|", runvars$output_years, fixed = TRUE)){
     runvars <- mutate(runvars, output_years = add_one(as.character(output_years)))
   }
+  if(has_name(runvars, 'mutation_output_years')){
+    runvars <- mutate(runvars, mutation_output_years = add_one(as.character(mutation_output_years)))
+  }
   
   # Does this run change the climate?
   climchangeyears <- as.numeric(str_split_1(as.character(pull(runvars, cdclimgentime)), fixed("|"))) 
@@ -80,6 +83,7 @@ for(run in 1:nruns){
   # Extract the options used by SLiM
   if(climate_change){runvars_used <- c("Popvars", "sizecontrol","runtime", "output_years", "cdclimgentime")}
   if(!climate_change){runvars_used <- c("Popvars", "sizecontrol", "runtime", "output_years")}
+  if(has_name(runvars, 'mutation_output_years')){runvars_used <- c(runvars_used, 'mutation_output_years', 'mutation_output_subpops')}
   runvars <- select(runvars, all_of(runvars_used))
   
   #### POPVARS ######
@@ -87,10 +91,6 @@ for(run in 1:nruns){
   popvars_file_out <- paste0(output_directory, "PopVars_slim.csv")
   runvars_out <- runvars |>
     mutate(Popvars = popvars_file_out)
-  
-  # Output runvars
-  write_csv(runvars_out, paste0(output_directory, "RunVars_slim.csv"))
-  
   
   ### Process PopVars ###
   # Read in CDMetaPOP popvars
@@ -102,48 +102,58 @@ for(run in 1:nruns){
   # Output file for patchvars for slim
   patchvars_file_out <- paste0(output_directory, "PatchVars_slim.csv")
   # Convert patchID to be 0 indexed. This is necessary for SLiM
-  patchvars <- mutate(patchvars, PatchID = row_number() - 1)
-  
-  ## 1. (a) Process Genes ##
-  
-  # First check if `Genes Initialize` is random or random_var
-  # random_var is unsupported
-  genes_initialize = pull(patchvars, `Genes Initialize`)
-  if (length(unique(genes_initialize)) == 1 & genes_initialize[1] == "random"){
-    print(glue("Using random gene initialization."))
-    genes_method = "random"
-  }
-  if (length(unique(genes_initialize)) == 1 & genes_initialize[1] == "random_var"){
-    print(glue("Option random_var not supported for initializing genes, using random instead."))
-    genes_method = "random"
-  }
-  if (length(unique(genes_initialize)) > 1 | !(genes_initialize[1] %in% c("random", "random_var"))){
-    print(glue("Using gene initialization from file."))
-    genes_method = "file"
+  patchvars <- mutate(patchvars, PatchID_old = PatchID, PatchID = row_number() - 1)
+  if(has_name(runvars, 'mutation_output_subpops')){
+    # Convert subpops to output mutations for in RunVars to SLiM PatchID format
+    output_subpops_old = runvars_out$mutation_output_subpops |> str_split_1(fixed("|")) |> as.numeric()
+    output_subpops_new = patchvars |> filter(PatchID_old %in% output_subpops_old) |> pull(PatchID)
+    runvars_out$mutation_output_subpops = paste(output_subpops_new, collapse = "|")
   }
   
-  ## 1. (a) (i)
-  ## For method "file"
-  ## Merge all gene files and assign a position to each locus.##
-  ## This step is necessary to ensure that loci with the same name get assigned to 
-  ## the same position in the genome in SLiM
-  if(genes_method == "file"){
-    # Read in all gene files and merge
-    genes_list <- map2(paste0(param_directory, pull(patchvars, `Genes Initialize`)),
-                       patchvars$PatchID,
-                       split_genes)
-    all_genes <- reduce(genes_list, merge_genes) |>
-      rename("Frequency_0" = Frequency, "PatchID_0" = PatchID)
-    all_genes <- mutate(all_genes, position = match(locus, unique(all_genes$locus)) - 1)
+  ## 1. (a) Process Genes (if needed) ##
+  if(!has_name(patchvars, "Genes Initialize")){
+    genes_method = 'none'
+  }
+  if(has_name(patchvars, "Genes Initialize")){
+    # First check if `Genes Initialize` is random or random_var
+    # random_var is unsupported
+    genes_initialize = pull(patchvars, `Genes Initialize`)
+    if (length(unique(genes_initialize)) == 1 & genes_initialize[1] == "random"){
+      print(glue("Using random gene initialization."))
+      genes_method = "random"
+    }
+    if (length(unique(genes_initialize)) == 1 & genes_initialize[1] == "random_var"){
+      print(glue("Option random_var not supported for initializing genes, using random instead."))
+      genes_method = "random"
+    }
+    if (length(unique(genes_initialize)) > 1 | !(genes_initialize[1] %in% c("random", "random_var"))){
+      print(glue("Using gene initialization from file."))
+      genes_method = "file"
+    }
     
-    ## 1. (a) (ii) Split gene files back into patches and write to file##
-    # Folder for storing gene files for SLiM
-    genes_folder = paste0(output_directory, "genes/")
-    dir.create(file.path(genes_folder), showWarnings = FALSE)
-    # Create a new column in patchvars with the names of the gene files for slim
-    patchvars <- mutate(patchvars, genes_file_slim = paste0(genes_folder, "genes_", PatchID, ".csv"))
-    # Split all genes into patches and write to appropriate files
-    map2(patchvars$genes_file_slim, patchvars$PatchID, patch_genes, all_genes = all_genes)
+    ## 1. (a) (i)
+    ## For method "file"
+    ## Merge all gene files and assign a position to each locus.##
+    ## This step is necessary to ensure that loci with the same name get assigned to 
+    ## the same position in the genome in SLiM
+    if(genes_method == "file"){
+      # Read in all gene files and merge
+      genes_list <- map2(paste0(param_directory, pull(patchvars, `Genes Initialize`)),
+                         patchvars$PatchID,
+                         split_genes)
+      all_genes <- reduce(genes_list, merge_genes) |>
+        rename("Frequency_0" = Frequency, "PatchID_0" = PatchID)
+      all_genes <- mutate(all_genes, position = match(locus, unique(all_genes$locus)) - 1)
+      
+      ## 1. (a) (ii) Split gene files back into patches and write to file##
+      # Folder for storing gene files for SLiM
+      genes_folder = paste0(output_directory, "genes/")
+      dir.create(file.path(genes_folder), showWarnings = FALSE)
+      # Create a new column in patchvars with the names of the gene files for slim
+      patchvars <- mutate(patchvars, genes_file_slim = paste0(genes_folder, "genes_", PatchID, ".csv"))
+      # Split all genes into patches and write to appropriate files
+      map2(patchvars$genes_file_slim, patchvars$PatchID, patch_genes, all_genes = all_genes)
+    }
   }
   
   ## 1. (b) Process classvars
@@ -155,7 +165,7 @@ for(run in 1:nruns){
                        "Age Mortality Out %", "Age Mortality Back %", "Migration Out Prob",
                        "Migration Back Prob", "Straying Prob", "Dispersal Prob")
   }
-  else{
+  if(runvars$sizecontrol != 'Y'){
     if(grepl("~", classvars$Maturation)[1]){
       classvars <- mutate(classvars, Maturation_F = as.numeric(str_split_i(Maturation, "~", 1)),
                           Maturation_M = as.numeric(str_split_i(Maturation, "~", 2)))
@@ -255,14 +265,17 @@ for(run in 1:nruns){
                           mature_age_f = str_split_i(mature_age, "~", 1),
                           mature_age_m = str_split_i(mature_age, "~", 1))
   }
-  else{
-    popvars_new <- mutate(popvars_new,
-                          mature_age_f = mature_age,
-                          mature_age_m = mature_age)
-  }
   ## 4. Remove unused variables and write to file
-  if(popvars$mutationtype[1] != 'random'){
-    print(glue("Mutation type {popvars$mutationtype} not supported, using 'random'"))
+  # First, set default genetic parameters if loci is not specified
+  if(!has_name(popvars_new, 'loci')){
+    popvars_new$loci = 0
+    popvars_new$startGenes = 0
+    popvars_new$muterate = 0
+  }
+  if(has_name(popvars, 'mutationtype')){
+    if(popvars$mutationtype[1] != 'random'){
+      print(glue("Mutation type {popvars$mutationtype} not supported, using 'random'"))
+    }
   }
   if(runvars$sizecontrol == 'Y'){
     popvars_used <- c("xyfilename", "mate_cdmat", "matemoveno", "migrateout_cdmat",
@@ -273,7 +286,7 @@ for(run in 1:nruns){
                       "mature_eqn_slope_m", "mature_eqn_int_f", "mature_eqn_int_m", "mature_age_f", "mature_age_m",
                       "popmodel", "startGenes", "muterate")
   }
-  else{
+  if(runvars$sizecontrol != 'Y'){
     popvars_used <- c("xyfilename", "mate_cdmat", "matemoveno", "migrateout_cdmat",
                       "migrateback_cdmat", "stray_cdmat", "disperse_cdmat",
                       "Egg_Mortality", "offno", "loci", "mature_age_f", "mature_age_m",
@@ -294,10 +307,27 @@ for(run in 1:nruns){
     genome_outfile <- paste0(output_directory, "genome.csv")
     write_csv(genome, genome_outfile)
     popvars_new$genome <- genome_outfile
-    popvars_used <- c(popvars_used, "genome", "qtl_prop_genome", "qtl_pheno_eff", "qtl_env_variable",
-                      "qtl_ve", "qtl_fit_sd")
-    if(has_name(popvars, "qtl_mutations_initial")){
-      popvars_used <- c(popvars_used, "qtl_mutations_initial")
+    # Is this a QTL model with one trait?
+    if(has_name(popvars, "qtl_pheno_eff")){
+      popvars_used <- c(popvars_used, "genome", "qtl_prop_genome", "qtl_pheno_eff", "qtl_env_variable",
+                        "qtl_ve", "qtl_fit_sd")
+      if(has_name(popvars, "qtl_mutations_initial")){
+        popvars_used <- c(popvars_used, "qtl_mutations_initial")
+      }
+    }
+    # Or is this a QTL model for thermal performance curve?
+    if(has_name(popvars, "Topt_pheno_eff")){
+      popvars_used <- c(popvars_used,
+                        "genome", 
+                        "qtl_prop_genome",
+                        "Topt_baseline",
+                        "epsilon_baseline",
+                        "Topt_VE",
+                        "epsilon_VE",
+                        "Topt_cost",
+                        "epsilon_cost",
+                        "Topt_pheno_eff",
+                        "epsilon_pheno_eff")
     }
   }
   # For gene initialization method "random", check that number of alleles is a single number
@@ -312,6 +342,8 @@ for(run in 1:nruns){
   if(climate_change){popvars_used = c("year", popvars_used)}
   popvars_out <- select(popvars_new, all_of(popvars_used)) |> mutate(startGenes = as.numeric(startGenes) + 1)
   write_csv(popvars_out, popvars_file_out)
+  # Output runvars
+  write_csv(runvars_out, paste0(output_directory, "RunVars_slim.csv"))
   print(glue('Processing run {run} of {nruns} finished'))
 }
 
