@@ -47,8 +47,7 @@ function (void)updatePlotTPC(void)
 					xlab="temperature", ylab="performance");
 		colors = colors(length(plot_subpops), 'cividis');
 		for(i in seqAlong(epsilon)){
-			x = (temperature-Topt[i])/epsilon[i];
-			P = pmax(0.0, exp(x)*(1-x) - abs(epsilon[i]-EPSILON_BASELINE)*EPSILON_COST - abs(Topt[i]-TOPT_BASELINE)*TOPT_COST);
+			P = thermal_performance(temperature, Topt[i], epsilon[i], TOPT_COST, EPSILON_COST, asFloat(TOPT_BASELINE), asFloat(EPSILON_BASELINE));
 			plot.lines(temperature, P, colors[i]);
 		}
 		
@@ -97,10 +96,10 @@ initialize() {
 	// then the values of the default parameters will be overridden with the values sepcified
 	defaults = Dictionary(
 		"SEED", getSeed(), // random seed
-		"RUNVARS_FILE", 'trout_genome/thermal_performance/slim_output/slim_parameters/run1/RunVars_slim.csv', // File containing run info
+		"RUNVARS_FILE", 'slim_output/slim_parameters/run1/RunVars_slim.csv', // File containing run info
 		//"RUNVARS_FILE", 'QTL_test/RunVars_slim.csv', // File containing run info
 		//"PARAM_FOLDER", "./", // Folder containing parameter files
-		"PARAM_FOLDER", 'trout_genome/', // Folder containing parameter files
+		"PARAM_FOLDER", './', // Folder containing parameter files
 		"IND_OUT_FOLDER", "slimgui_testing/", // Folder for individual output
 		"ALLPOPS_OUT", "slimgui_testing/summary_popAllTime.csv",
 		"BYCLASS", "slimgui_testing/summary_classAllTime.csv",
@@ -1031,7 +1030,8 @@ function (void)mature(object <Individual> individuals){
 // Thermal performance curve
 function (float)thermal_performance(float temperature, float Topt, float epsilon, float Topt_cost, float epsilon_cost, float Topt_baseline, float epsilon_baseline){
 	x = (temperature-Topt)/epsilon;
-   P = pmax(0.0, exp(x)*(1-x) - abs(Topt - Topt_baseline)*Topt_cost - abs(epsilon - epsilon_baseline)*epsilon_cost);
+	cost_scaling = pmax(0.0, pmin(1 - abs(Topt - Topt_baseline)*Topt_cost - abs(epsilon - epsilon_baseline)*epsilon_cost, 1.0));
+   P = pmax(0.0, exp(x)*(1-x)*cost_scaling);
    return(P);
 }
 
