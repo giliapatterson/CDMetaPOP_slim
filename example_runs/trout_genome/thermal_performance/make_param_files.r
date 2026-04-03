@@ -12,9 +12,9 @@ dir.create(file.path(datadir), showWarnings = FALSE)
 ## Test low and high dispersal
 # All movement is through dispersal
 # If an individual disperses they can't stay in their natal patch
-dispersal_prob_vals = 0.01
+dispersal_prob_vals = c(0.01, 0.01)
 # Test age and size control
-sizecontrol_vals = 'N'
+sizecontrol_vals = c('Y', 'N')
 
 mcruns = 1 # Number of runs for each parameter
 
@@ -36,12 +36,12 @@ runtime = 1500
 output_years = paste0(c(1, Tdelta, Tdelta + change_years, runtime - 1),collapse = "|") # Years to write out individuals 
 
 # Total population size to simulate
-#Ntotal = 10000
-Ntotal = 1000
+Ntotal = 10000
+#Ntotal = 1000
 # Shorten patches for testing
 set.seed(100389)
-#npatches <- 125
-npatches = 5
+npatches <- 125
+#npatches = 5
 patch_is <- sort(sample(1:125, npatches, replace = FALSE))
 
 ## Making RunVars file

@@ -95,7 +95,9 @@ If both options are used, the initial mutations will be added to the initial gen
 
 ### Parameters
 
-The parameters for the quantitative trait model are specified in PopVars and are summarized below:
+The parameters for the quantitative trait model are specified in PopVars and PatchVars and are summarized below:
+
+In PopVars:
 
 The structure of the genome can be specified two ways. 
 
@@ -156,6 +158,100 @@ If the quantitative trait model is used, CDMetaPOP_slim will output two addition
 
 `avg_phenotype`: Average phenotype across all individuals in a patch.
 
+## Thermal performance curves as quantitative traits
+
+CDMetaPOP Version 3S includes support for modeling thermal performance curves as quantitative traits. The model is based on the universal thermal performance curve [[1](https://doi.org/10.1073/pnas.2513099122)]. The curve is specified by two parameters, $T_{opt}$ and $\epsilon$ and takes the form
+$$P = \max(e^{x}(1-x), 0)$$
+where $x = (t-T_{opt})/\epsilon$. $T_{opt}$ is the temperature in degrees Celsius at which an organism has an optimal performance of 1.0. As temperature increases, performance decreases to 0 at $CT_{max} = T_{opt} + \epsilon$. $\epsilon$ is known as the "thermal safety margin" [[2](ttps://doi.org/10.1111/ele.12686)].
+
+<img src="example_runs/trout_genome/thermal_performance/tpc.png" alt="An example of a thermal performance curve. The optimal thermal performance is 1.0 at T opt equals 10 degrees celsius. Performance sharply declines to 0 as temperature increases, with performance of 0 at T opt plus epsilon equals 17 degrees celsius">
+
+$T_{opt}$ and $\epsilon$ are modeled as independent quantitative traits. Mutations at half of the non-neutral sites in the genome influence $T_{opt}$ and mutations in the other half influence $\epsilon$. $T_{opt}$ for an individual $j$ is calculated as
+$$T_{opt,j} = \sum_{h=1}^{2}\sum_{i \in T_{opt} \text{ sites}}a_{ijh} + B_{T_{opt}} + E_{T_{opt},j}$$
+where $a_{ijh}$ is the phenotyic effect of the allele at locus $i$, on the $h^{th}$ copy of the genome of individual $j$, $B_{T_{opt}}$ is the baseline phenotype for $T_{opt}$, and $E_{T_{opt},j}$ is the additive effect of the environment on $T_{opt}$ for individual $j$. $E_{T_{opt},j}$ is drawn from a normal distribution with mean 0 and variance $V_{E, T_{opt}}$. 
+$\epsilon$ for an individual $j$ is calculated similarly, with
+$$\epsilon_{j} = \sum_{h=1}^{2}\sum_{i \in \epsilon \text{ sites}}a_{ijh} + B_{\epsilon} + E_{\epsilon,j}$$
+where $B_{\epsilon}$ is the baseline phenotype for $\epsilon$ and $E_{\epsilon,j}$ is drawn from a normal distribution with mean 0 and variance $V_{E, \epsilon}$. 
+
+The genome is initialized with no mutations and all individuals have $T_{opt} = B_{T_{opt}}$ and $\epsilon = B_{\epsilon}$. Mutations accumulate at the rate specified for each chromosome, introducing variation in thermal performance curves between individuals.
+
+Because becoming more tolerant to hot or cold temperature can decrease an individuals overall performance, we also introduce a potential cost to increasing or decreasing $T_{opt}$ or $\epsilon$ by one degree Celsius from the baseline value. Cost is specified by the user. The cost scales the thermal performance curve by 
+$$\max\left(0, 1 - |T_{opt} - B_{T_{opt}}|C_{T_{opt}} - |\epsilon - B_{\epsilon}|C_{\epsilon}\right).$$
+When cost is not set to 0, individuals with very low or very high values of $T_{opt}$ or $\epsilon$ will have lower maximum performance.
+
+The thermal performance curve influences fitness in two steps: fecundity and mortality. Mortality takes place immediately after dispersal and before density-dependent and age-dependent survival. An individual's probability of survival is the value of their thermal performance curve at the temperature they are currently experiencing. This temperature is `GrowthTemperatureBack` in their current patch.
+
+<img src="example_runs/trout_genome/thermal_performance/penalty_tpc.png" alt="Examples of thermal performance curves with costs.">
+
+For fecundity, the number of eggs produced by a female is multiplied by the value of her thermal performance curve at the temperature she is experiencing when she reproduces (`GrowthTemperatureBack` in here current patch.) In some CDMetaPOP models, fecundity is influenced by temperature through differences in growth rates at different temperatures (`sizecontrol = 'Y'`). This means that there are three options for modeling the effect of temperature on fecundity. The first is "Environmental only", when the thermal performance curve model is not operating and `sizecontrol = 'Y'`. In this model an individual's fecundity will depend only on the temperature in their patch, with no influence of genetics. The second is "Genetic only", when the thermal performance curve model is operating and `sizecontrol = 'N'`. In this model an individual's fecundity will depend on the interaction between genetics and environment throught $T_{opt}$ and $\epsilon$, but there is no independent effect of environment. The final is "Environmental and genetic", where an individual's fecundity depends both on the interaction between genetics and environment and on the independent effect of environment. Examples of these models are shown below.
+
+<img src="example_runs/trout_genome/thermal_performance/fecundity_tpc.png" alt="Examples of fecundity curves.">
+
+### Parameters
+
+The parameters for the thermal performance curve model are specified in RunVars and PopVars and are summarized below:
+
+In PopVars:
+
+`genome`: Path to file containing information on the genome. This file contains four columns: `Chromosome`, `Length`, `recombination_rate`, and `mutation_rate`. These parameters cannot change over time.
+
+`qtl_prop_genome`: The proportion of the genome where new mutations influence phenotype. In the remainder of the genome, mutations are neutral. Half of the non-neutral sites influence $T_{opt}$ and half influence $\epsilon$. Cannot change over time.
+
+`Topt_pheno_eff`: A piece of code for drawing the effect of a new mutation on $T_{opt}$. This code should return a single value. Any of the distribution functions from R will work, e.g. "rnorm(1, 0, 5.0)" or "rexp(1, 1)". So will sampling from a fixed set of phenotypic effects, e.g. "sample(c(-1, 0, 1), 1)".
+
+`epsilon_pheno_eff`: A piece of code for drawing the effect of a new mutation on $\epsilon$.
+
+`Topt_ve`: V_E for $T_{opt}$.
+
+`epsilon_ve`: V_E for $\epsilon$. 
+
+`Topt_baseline`: Value of $T_{opt}$ when no mutations influencing $T_{opt}$ are present.
+
+`epsilon_baseline`: Value of $\epsilon$ when no mutations influencing $\epsilon$ are present.
+
+`Topt_cost`: Cost of changing $T_{opt}$ by 1 degree Celsius from `Topt_baseline`.
+
+`epsilon_cost`: Cost of changing $\epsilon$ by 1 degree Celsius from `epsilon_baseline`.
+
+In RunVars:
+
+`mutation_output_years`: Years in which to output information about all mutations in a chosen subset of patches. Years should be separated by "|" and 0 indexed, e.g. "0|10|20".
+
+`mutation_output_subpops`: Patch IDs for chosen subset of patches. Should correspond to the `PatchID` column in PatchVars and be separated by "|", e.g. "0|1|2|3|4|5".
+
+### Output
+
+As for the quantitative trait model, CDMetaPOP_slim will output two additional files, QTL_overall.csv and QTL subpops.csv. These files contain the same information as for the quantitative trait model, but separated by $T_{opt}$ and $\epsilon$.
+
+CDMetaPOP_slim will also output an additional file, `mutation_origins.csv `, that allows a user to track where adaptive variation is arising. For each year specified in RunVars, and for each of the focal patches specified in RunVars, this file will contain information on the origin of all mutations in the patch. The columns in this file include:
+
+`tick`: Year
+
+`subpop`: Focal patch
+
+`origin_subpop`: Source patch
+
+`Topt_count`: Number of mutations in the focal patch influencing $T_{opt}$ that originated in the source patch.
+
+`epsilon_count`: Number of mutations in the focal patch influencing $\epsilon$ that originated in the source patch.
+
+`neutral_count`: Number of neutral mutations in the focal patch that originated in the source patch.
+
+`Topt_mean_contribution`: Mean contribution to $T_{opt}$ of mutations in the focal patch that originated in the source patch.
+
+`epsilon_mean_contribution`: Mean contribution to $\epsilon$ of mutations in the focal patch that originated in the source patch.
+
+`Topt_VA`: Additive genetic variance of mutations influencing $T_{opt}$ in the focal patch that originated in the source patch.
+
+`epsilon_VA`: : Additive genetic variance of mutations influencing $\epsilon$ in the focal patch that originated in the source patch.
+
+### References for thermal performance curve model
+
+1. Arnoldi J-F, Jackson AL, Peralta-Maraver I, Payne NL. A universal thermal performance curve arises in biology and ecology. Proc Natl Acad Sci USA. 2025;122:e2513099122. https://doi.org/10.1073/pnas.2513099122.
+
+2. Sinclair BJ, Marshall KE, Sewell MA, Levesque DL, Willett CS, Slotsbo S, et al. Can we predict ectotherm responses to climate change using thermal performance curves and body temperatures? Ecology Letters. 2016;19:1372–85. https://doi.org/10.1111/ele.12686.
+
+
 ## Example runs
 
 ### Modeling thermal optimum as a quantitative trait
@@ -178,7 +274,7 @@ bash climate_change_McKenzie/run_and_plot.sh
 example_runs/trout_genome
 ```
 
-This example runs the same model of evolution of thermal tolerance as the climate warms as above, but on a genome with 32 chromosomes. The genome is modeled after the Westslope cutthroat trout genome [1], excluding the sex chromosomes. 
+This example runs the same model of evolution of thermal tolerance as the climate warms as above, but on a genome with 32 chromosomes. The genome is modeled after the Westslope cutthroat trout genome [[1](https://doi.org/10.1093/g3journal/jkaf064)], excluding the sex chromosomes. 
 
 To run the script, navigate to the `example_runs/trout_genome` directory and run:
 
@@ -188,6 +284,19 @@ python ../../CDMetaPOP_slim/CDmetaPOP_slim.py -c8 -d climate_change_McKenzie -i 
 
 1. Flores A-M, Christensen KA, Godin T, Palti Y, Campbell MR, Waldbieser GC, et al. The genome assembly of the westslope cutthroat trout, Oncorhynchus lewisi , reveals interspecific chromosomal rearrangements with the rainbow trout, Oncorhynchus mykiss. G3: Genes, Genomes, Genetics. 2025;15:jkaf064. https://doi.org/10.1093/g3journal/jkaf064.
 
+### Modeling evolution of thermal performance curves
+
+```
+example_runs/trout_genome/thermal_performance
+```
+
+This example runs on the same 32 chromosome Westslope cutthroat trout genome as above. 
+
+To run the script, navigate to the `example_runs/trout_genome/thermal_performance` directory and run:
+
+```
+bash run_and_plot.sh
+```
 
 ### Coastal cutthroat trout in the McKenzie
 

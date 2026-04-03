@@ -1,5 +1,6 @@
 library(tidyverse)
 library(glue)
+library(geomtextpath)
 
 ## Popvars for size control = 'Y'
 popvars <- read_csv("PopVars1.csv")
@@ -17,12 +18,46 @@ tpc_df <- expand_grid(Topt = c(popvars$Topt_baseline - 5, popvars$Topt_baseline,
          x = (t-Topt)/epsilon,
          P1 = exp(x)*(1-x)*penalty_scale,
          P = if_else(P1>0, P1, 0),
-         Penalty = if_else(cost_scale == 0, "No", "Yes"))
-ggplot(tpc_df, aes(x = t, y = P, color = Penalty)) +
+         Penalty = if_else(cost_scale == 0, "No", "Yes"),
+         CTMax = Topt + epsilon)
+penalty_plot <- ggplot(tpc_df, aes(x = t, y = P, color = Penalty)) +
   geom_line() +
   xlab("Temperature") +
+  ylab("Survival Probability") +
+  facet_grid(epsilon~Topt, labeller = label_both, scales = "free_y") +
+  theme_dark(base_size = 14) +
+  scale_colour_viridis_d('Penalty')
+ggsave("penalty_tpc.png", penalty_plot, width = 7, height = 4)
+
+one_tpc <- tibble(Topt = popvars$Topt_baseline,
+                      epsilon = 7,
+                      t = seq(-25, 28, by = 0.01)) |>
+  mutate(x = (t-Topt)/epsilon,
+         P1 = exp(x)*(1-x),
+         P = if_else(P1>0, P1, 0),
+         CTMax = Topt + epsilon)
+tpc <- ggplot() +
+  geom_line(data = one_tpc,
+            aes(x = t, y = P)) +
+  xlab("Temperature (degrees Celsius)") +
   ylab("Performance") +
-  facet_grid(epsilon~Topt, labeller = label_both, scales = "free_y")
+  theme_bw(base_size = 14) +
+  geom_segment(aes(x = one_tpc$Topt[1], y = 0, xend = one_tpc$Topt[1], yend = 0.12),
+               arrow = arrow(ends = 'first', type = 'closed',
+                             length = unit(0.11, "inches"))) +
+  geom_segment(aes(x = one_tpc$Topt[1], y = 1.0, xend = one_tpc$Topt[1], yend = 0.18)) +
+  annotate("text", x = one_tpc$Topt[1], y = 0.16, label = 'T[opt]', parse = TRUE, size = 8) +
+  geom_textsegment(aes(x = one_tpc$Topt[1],
+                       y = 0,
+                       xend = one_tpc$CTMax[1],
+                       yend = 0,
+                       label = 'epsilon'),
+                   parse = TRUE,
+                   arrow = arrow(ends = 'both', type = 'closed',
+                                 length = unit(0.11, "inches")),
+                   size = 8) +
+  ggtitle("Thermal Performance Curve")
+ggsave("tpc.png", tpc, width = 7, height = 5)
 
 ## Von Bertalanffy growth
 source('parameter_functions.R')
@@ -72,17 +107,16 @@ mat_tpc_df <- growth_df |>
          "Environmental and genetic effects" = mean_eggs*pmature*P) |>
   group_by(ages, sex) |>
   reframe(pick(everything()), "Genetic effect only" = max(`Environmental effect only`)*P) |>
-  pivot_longer(c("Environmental and genetic effects", "Genetic effect only"), names_to = "method", values_to = "fertility")
+  pivot_longer(c("Environmental effect only", "Environmental and genetic effects", "Genetic effect only"), names_to = "method", values_to = "fertility")
 
-ggplot(mat_tpc_df |> filter(sex == 'F', ages == 7), aes(x = t, y = fertility, color = method)) +
+fecundity <- ggplot(mat_tpc_df |> filter(sex == 'F', ages == 7), aes(x = t, y = fertility, color = method)) +
   geom_line() +
   xlab("Patch temperature\n(degrees Celsius)") +
-  ylab("Age 7 Fertility") +
-  scale_colour_discrete(
-    name = "Method",
-  )  +
+  ylab("Age 7 Fecundity") +
   facet_grid(epsilon*Penalty~Topt, labeller = label_both) +
-  theme_bw(base_size = 14)
+  theme_dark(base_size = 14) +
+  scale_color_viridis_d(name = "Model", option = 'magma')
+ggsave("fecundity_tpc.png", fecundity, width = 8, height = 8)
 
 x = seq(0, 5, 0.1)
 plot(x,  exp(x) -1)
