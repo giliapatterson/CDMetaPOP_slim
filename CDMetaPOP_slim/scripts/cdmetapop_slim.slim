@@ -96,7 +96,7 @@ initialize() {
 	// then the values of the default parameters will be overridden with the values sepcified
 	defaults = Dictionary(
 		"SEED", getSeed(), // random seed
-		"RUNVARS_FILE", 'slim_output/slim_parameters/run1/RunVars_slim.csv', // File containing run info
+		"RUNVARS_FILE", 'slim_output/slim_parameters/run2/RunVars_slim.csv', // File containing run info
 		//"RUNVARS_FILE", 'QTL_test/RunVars_slim.csv', // File containing run info
 		//"PARAM_FOLDER", "./", // Folder containing parameter files
 		"PARAM_FOLDER", './', // Folder containing parameter files
@@ -140,7 +140,12 @@ initialize() {
 		output_split = asInteger(strsplit(asString(RUNVARS.getValue("mutation_output_years")), "|"));
 		defineConstant("MUTATION_OUTPUT_TICKS", output_split);
 		output_split = asInteger(strsplit(asString(RUNVARS.getValue("mutation_output_subpops")), "|"));
-		defineConstant("MUTATION_OUTPUT_SUBPOP_IDS", output_split);
+		if(NPATCHES == 'all') defineConstant("MUTATION_OUTPUT_SUBPOP_IDS", output_split);
+		if(NPATCHES != 'all'){
+			nfocal_subpops = min(NPATCHES, length(output_split));
+			focal_subpops = sample(0:(NPATCHES-1), size = nfocal_subpops);
+			defineConstant("MUTATION_OUTPUT_SUBPOP_IDS", focal_subpops);
+		}
 		writeMutationalOrigins(MUTATION_OUTPUT_FILE, T, MUTATION_OUTPUT_SUBPOP_IDS);
 	}
 	// Placeholder
