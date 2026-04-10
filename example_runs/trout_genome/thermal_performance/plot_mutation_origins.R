@@ -138,7 +138,16 @@ ggplot(filter(qtl_with_temp_group, PatchID %in% unique(temp_groups_with_missing$
   facet_grid(sizecontrol~patch_name) +
   theme_bw() +
   xlab('Year') +
-  ylab('Population size')
+  ylab('Average Topt')
 ggsave("mutation_origins/focal_patches_Topt.png", width = 7, height = 6, create.dir = TRUE)
+
+ggplot(filter(qtl_with_temp_group, PatchID %in% unique(temp_groups_with_missing$subpop)), aes(x = tick, y = avg_epsilon)) +
+  geom_point() +
+  geom_smooth() +
+  facet_grid(sizecontrol~patch_name) +
+  theme_bw() +
+  xlab('Year') +
+  ylab('Average epsilon')
+ggsave("mutation_origins/focal_patches_epsilon.png", width = 7, height = 6, create.dir = TRUE)
 
 

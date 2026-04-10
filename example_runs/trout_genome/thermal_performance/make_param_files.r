@@ -49,7 +49,7 @@ gridformat = 'genalex' # Output for alleles
 
 runvars_df <- tibble(Popvars = Popvars_names,sizecontrol = sizecontrol_vals,mcruns,runtime,output_years,gridformat,cdclimgentime,
                      dispersal_prob = dispersal_prob_vals, mutation_output_years = NA,
-                     mutation_output_subpops = NA)
+                     mutation_output_subpops = NA, mutation_origin_year = 799)
 ## ClassVars
 classvars_file <- "ClassVars.csv"
 

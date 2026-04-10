@@ -106,7 +106,7 @@ ggplot(qtl_subpops, aes(x = year, y = avg_Topt, color = PatchID)) +
 ggsave("qtl_plots/Topt.png", width = 7, height = 6, create.dir = TRUE)
 
 ggplot(qtl_subpops, aes(x = year, y = avg_epsilon, color = PatchID)) +
-  geom_point(aes(y = avg_Topt), size = 0.5, alpha = 0.5) +
+  geom_point(aes(y = avg_epsilon), size = 0.5, alpha = 0.5) +
   facet_grid(~sizecontrol, labeller = label_both) +
   scale_color_viridis_d(name = "PatchID") +
   xlab("Year") +
