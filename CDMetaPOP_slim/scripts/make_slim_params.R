@@ -67,7 +67,8 @@ for(run in 1:nruns){
     runvars <- mutate(runvars, output_years = add_one(as.character(output_years)))
   }
   if(has_name(runvars, 'mutation_output_years')){
-    runvars <- mutate(runvars, mutation_output_years = add_one(as.character(mutation_output_years)))
+    runvars <- mutate(runvars, mutation_output_years = add_one(as.character(mutation_output_years)),
+      mutation_origin_year = mutation_origin_year + 1)
   }
   
   # Does this run change the climate?
@@ -83,7 +84,7 @@ for(run in 1:nruns){
   # Extract the options used by SLiM
   if(climate_change){runvars_used <- c("Popvars", "sizecontrol","runtime", "output_years", "cdclimgentime")}
   if(!climate_change){runvars_used <- c("Popvars", "sizecontrol", "runtime", "output_years")}
-  if(has_name(runvars, 'mutation_output_years')){runvars_used <- c(runvars_used, 'mutation_output_years', 'mutation_output_subpops')}
+  if(has_name(runvars, 'mutation_output_years')){runvars_used <- c(runvars_used, 'mutation_output_years', 'mutation_output_subpops', 'mutation_origin_year')}
   runvars <- select(runvars, all_of(runvars_used))
   
   #### POPVARS ######
@@ -333,6 +334,9 @@ for(run in 1:nruns){
                         "epsilon_cost",
                         "Topt_pheno_eff",
                         "epsilon_pheno_eff")
+      if(has_name(popvars, "qtl_mutations_initial")){
+        popvars_used <- c(popvars_used, "qtl_mutations_initial")
+      }
     }
   }
   # For gene initialization method "random", check that number of alleles is a single number

@@ -47,41 +47,46 @@ function (void)updatePlotTPC(void)
 					xlab="temperature", ylab="performance");
 		colors = colors(length(plot_subpops), 'cividis');
 		for(i in seqAlong(epsilon)){
-			P = thermal_performance(temperature, Topt[i], epsilon[i], TOPT_COST, EPSILON_COST, asFloat(TOPT_BASELINE), asFloat(EPSILON_BASELINE));
+			P = thermal_performance(temperature, Topt[i], epsilon[i], asFloat(TOPT_COST), asFloat(EPSILON_COST), asFloat(TOPT_BASELINE), asFloat(EPSILON_BASELINE));
 			plot.lines(temperature, P, colors[i]);
 		}
 		
 		// Mutational effects for Topt
 		min_effect = min(TOPT_EFFECTS);
 		max_effect = max(TOPT_EFFECTS);
-		bins = 10;
-		bin_starts = min_effect + (0:(bins))*(max_effect - min_effect)/bins;
-		i_vals = 0:(bins-1);
-		counts = sapply(i_vals, "sum(TOPT_EFFECTS >= bin_starts[applyValue] & TOPT_EFFECTS < bin_starts[applyValue+1]);");
-		x_vals = sapply(i_vals, "mean(bin_starts[c(applyValue, applyValue + 1)]);");
-		
-		plot = slimgui.createPlot("Topt Mutation effects",
-			xrange=c(min_effect - 1, max_effect + 1), yrange=c(0,max(counts) + 1),
-			xlab="effect", ylab="count");
-		
-		plot.lines(x_vals, counts);
-		plot.abline(v=0, color = 'black');
+		if(!isNULL(min_effect) & !isNULL(max_effect)){
+			bins = 10;
+			bin_starts = min_effect + (0:(bins))*(max_effect - min_effect)/bins;
+			i_vals = 0:(bins-1);
+			counts = sapply(i_vals, "sum(TOPT_EFFECTS >= bin_starts[applyValue] & TOPT_EFFECTS < bin_starts[applyValue+1]);");
+			x_vals = sapply(i_vals, "mean(bin_starts[c(applyValue, applyValue + 1)]);");
+			
+			plot = slimgui.createPlot("Topt Mutation effects",
+				xrange=c(min_effect - 1, max_effect + 1), yrange=c(0,max(counts) + 1),
+				xlab="effect", ylab="count");
+			
+			plot.lines(x_vals, counts);
+			plot.abline(v=0, color = 'black');
+		}
 		
 		// Mutational effects for Epsilon
+		
 		min_effect = min(EPSILON_EFFECTS);
 		max_effect = max(EPSILON_EFFECTS);
-		bins = 10;
-		bin_starts = min_effect + (0:(bins))*(max_effect - min_effect)/bins;
-		i_vals = 0:(bins-1);
-		counts = sapply(i_vals, "sum(EPSILON_EFFECTS >= bin_starts[applyValue] & EPSILON_EFFECTS < bin_starts[applyValue+1]);");
-		x_vals = sapply(i_vals, "mean(bin_starts[c(applyValue, applyValue + 1)]);");
-		
-		plot = slimgui.createPlot("Epsilon Mutation effects",
-			xrange=c(min_effect - 1, max_effect + 1), yrange=c(0,max(counts) + 1),
-			xlab="effect", ylab="count");
-		
-		plot.lines(x_vals, counts);
-		plot.abline(v=0, color = 'black');
+		if(!isNULL(min_effect) & !isNULL(max_effect)){
+			bins = 10;
+			bin_starts = min_effect + (0:(bins))*(max_effect - min_effect)/bins;
+			i_vals = 0:(bins-1);
+			counts = sapply(i_vals, "sum(EPSILON_EFFECTS >= bin_starts[applyValue] & EPSILON_EFFECTS < bin_starts[applyValue+1]);");
+			x_vals = sapply(i_vals, "mean(bin_starts[c(applyValue, applyValue + 1)]);");
+			
+			plot = slimgui.createPlot("Epsilon Mutation effects",
+				xrange=c(min_effect - 1, max_effect + 1), yrange=c(0,max(counts) + 1),
+				xlab="effect", ylab="count");
+			
+			plot.lines(x_vals, counts);
+			plot.abline(v=0, color = 'black');
+		}
 		
 	}
 }
@@ -95,19 +100,20 @@ initialize() {
 	// If the file ./params.json exists, PARAMFILE is specified, or parameters are specified on the command line
 	// then the values of the default parameters will be overridden with the values sepcified
 	defaults = Dictionary(
-		"SEED", getSeed(), // random seed
-		"RUNVARS_FILE", 'slim_output/slim_parameters/run2/RunVars_slim.csv', // File containing run info
+		//"SEED", getSeed(), // random seed
+		"SEED", 5290, // random seed
+		"RUNVARS_FILE", 'parameters/slim_output/slim_parameters/run4/RunVars_slim.csv', // File containing run info
 		//"RUNVARS_FILE", 'QTL_test/RunVars_slim.csv', // File containing run info
 		//"PARAM_FOLDER", "./", // Folder containing parameter files
 		"PARAM_FOLDER", './', // Folder containing parameter files
-		"IND_OUT_FOLDER", "slimgui_testing/", // Folder for individual output
-		"ALLPOPS_OUT", "slimgui_testing/summary_popAllTime.csv",
-		"BYCLASS", "slimgui_testing/summary_classAllTime.csv",
-		"QTL_OUT", "slimgui_testing/QTL_overall.csv",
-		"QTL_SUBPOPS_OUT", "slimgui_testing/QTL_subpops.csv",
-		"MUTATION_OUTPUT_FILE", "slimgui_testing/mutation_origins.csv",
-		"FINISHED", "slimgui_testing/finished.txt",
-		"SCALEPOPSIZE", 1, // Decrease carrying capacities for testing
+		"IND_OUT_FOLDER", "./", // Folder for individual output
+		"ALLPOPS_OUT", "./summary_popAllTime.csv",
+		"BYCLASS", "./summary_classAllTime.csv",
+		"QTL_OUT", "./QTL_overall.csv",
+		"QTL_SUBPOPS_OUT", "./QTL_subpops.csv",
+		"MUTATION_OUTPUT_FILE", "./mutation_origins.csv",
+		"FINISHED", "./finished.txt",
+		"SCALEPOPSIZE", 1, // Decrease (or increase) carrying capacities for testing
 		"NPATCHES", 'all' // Decrease number of patches for testing
 	);
 	
@@ -146,6 +152,7 @@ initialize() {
 			focal_subpops = sample(0:(NPATCHES-1), size = nfocal_subpops);
 			defineConstant("MUTATION_OUTPUT_SUBPOP_IDS", focal_subpops);
 		}
+		defineConstant('MUTATION_ORIGIN_TICK', asInteger(RUNVARS.getValue('mutation_origin_year')));
 		writeMutationalOrigins(MUTATION_OUTPUT_FILE, T, MUTATION_OUTPUT_SUBPOP_IDS);
 	}
 	// Placeholder
@@ -823,12 +830,24 @@ late(){
 	}
 }
 
+MUTATION_ORIGIN_TICK late(){
+	if(QTL_TPC){
+		counts = matrix(sapply(sim.subpopulations, "sim.mutationCounts(applyValue, sim.mutations);"), nrow = length(sim.mutations));
+		freqs = apply(counts, 0, 'applyValue/sum(applyValue);');
+		for(i in seqAlong(sim.mutations)){ 	
+			sim.mutations[i].setValue('freqs800', freqs[,i]);
+		}
+		sim.substitutions.setValue('freqs800', sim.subpopulations.individualCount/sum(sim.subpopulations.individualCount));
+	}
+}
+
 MUTATION_OUTPUT_TICKS late(){
 	if(QTL_TPC){
 		print("Writing origin of mutations");
 		writeMutationalOrigins(MUTATION_OUTPUT_FILE, F, MUTATION_OUTPUT_SUBPOP_IDS);
 	}
 }
+
 late() {
 	if(QTL & !QTL_TPC){
 		ne_subpops = sim.subpopulations[sim.subpopulations.individualCount > 0];
@@ -1531,6 +1550,7 @@ function (void) writeQTLOutputSubpops(string outfile, logical header, logical qt
 			avg_epsilon = 'NA';
 			epsilon_variance = 'NA';
 			epsilon_Va = 'NA';
+			epsilon_Ve = 'NA';
 			Topt_Ve = 'NA';
 			epsilon_heritability = 'NA';
 			epsilon_alleles = 'NA';
@@ -1559,10 +1579,91 @@ function (float) calcAdditiveContributionOrigin(integer focal_subpop_id, integer
 function (string) mutationalOrigins(string header_string, integer focal_subpop_id){
 	focal_subpop = sim.subpopulations[focal_subpop_id];
 	if(focal_subpop.individualCount > 0 & length(focal_subpop.individuals.haplosomes.mutations) > 0){
-		origin_subpop = unique(focal_subpop.individuals.haplosomes.mutations.subpopID);
+		if(community.tick > MUTATION_ORIGIN_TICK){
+			all_mutations = unique(focal_subpop.haplosomes.mutationsOfType(m2));
+			focal_mutations = all_mutations[all_mutations.originTick <= MUTATION_ORIGIN_TICK];
+			new_mutations = all_mutations[all_mutations.originTick > MUTATION_ORIGIN_TICK];
+			all_subs = sim.substitutionsOfType(m2);
+			focal_subs = all_subs[all_subs.originTick <= MUTATION_ORIGIN_TICK];
+			new_subs = all_subs[all_subs.originTick > MUTATION_ORIGIN_TICK];
+			if(length(focal_mutations) > 0){
+				freqs800 = matrix(focal_mutations.getValue('freqs800'), nrow = length(sim.subpopulations));
+				current_counts = sim.mutationCounts(focal_subpop, focal_mutations);
+				if(length(focal_subs) > 0){
+					freqs800_subs = matrix(sim.substitutions.getValue('freqs800'), nrow = length(sim.subpopulations));
+					current_counts_subs = rep(focal_subpop.individualCount*2, length(sim.substitutions));
+					Topt_count_origin_tick = sapply(sim.subpopulations.id, "sum(current_counts*freqs800[applyValue,]) + sum(current_counts_subs*freqs800_subs[applyValue,]);");
+				}
+				else{
+					Topt_count_origin_tick = sapply(sim.subpopulations.id, "sum(current_counts*freqs800[applyValue,]);");
+				}
+				Topt_freq_origin_tick = Topt_count_origin_tick/sum(Topt_count_origin_tick);
+			}
+			if(length(focal_mutations) == 0) Topt_freq_origin_tick = rep('NA', length(sim.subpopulations));
+			Topt_prop_new = (length(new_mutations) + length(new_subs))/(length(all_mutations) + length(all_subs));
+			
+			all_mutations = unique(focal_subpop.haplosomes.mutationsOfType(m3));
+			focal_mutations = all_mutations[all_mutations.originTick <= MUTATION_ORIGIN_TICK];
+			all_subs = sim.substitutionsOfType(m3);
+			focal_subs = all_subs[all_subs.originTick <= MUTATION_ORIGIN_TICK];
+			new_subs = all_subs[all_subs.originTick > MUTATION_ORIGIN_TICK];
+			if(length(focal_mutations) > 0){
+				freqs800 = matrix(focal_mutations.getValue('freqs800'), nrow = length(sim.subpopulations));
+				current_counts = sim.mutationCounts(focal_subpop, focal_mutations);
+				if(length(focal_subs) > 0){
+					freqs800_subs = matrix(sim.substitutions.getValue('freqs800'), nrow = length(sim.subpopulations));
+					current_counts_subs = rep(focal_subpop.individualCount*2, length(sim.substitutions));
+					neutral_count_origin_tick = sapply(sim.subpopulations.id, "sum(current_counts*freqs800[applyValue,]) + sum(current_counts_subs*freqs800_subs[applyValue,]);");
+				}
+				else{
+					neutral_count_origin_tick = sapply(sim.subpopulations.id, "sum(current_counts*freqs800[applyValue,]);");
+				}
+				neutral_freq_origin_tick = neutral_count_origin_tick/sum(neutral_count_origin_tick);
+			}
+			if(length(focal_mutations) == 0) neutral_freq_origin_tick = rep('NA', length(sim.subpopulations));
+			neutral_prop_new = (length(new_mutations) + length(new_subs))/(length(all_mutations) + length(all_subs));
+			
+			all_mutations = unique(focal_subpop.haplosomes.mutationsOfType(m4));
+			focal_mutations = all_mutations[all_mutations.originTick <= MUTATION_ORIGIN_TICK];
+			all_subs = sim.substitutionsOfType(m4);
+			focal_subs = all_subs[all_subs.originTick <= MUTATION_ORIGIN_TICK];
+			new_subs = all_subs[all_subs.originTick > MUTATION_ORIGIN_TICK];
+			if(length(focal_mutations) > 0){
+				freqs800 = matrix(focal_mutations.getValue('freqs800'), nrow = length(sim.subpopulations));
+				current_counts = sim.mutationCounts(focal_subpop, focal_mutations);
+				if(length(focal_subs) > 0){
+					freqs800_subs = matrix(sim.substitutions.getValue('freqs800'), nrow = length(sim.subpopulations));
+					current_counts_subs = rep(focal_subpop.individualCount*2, length(sim.substitutions));
+					epsilon_count_origin_tick = sapply(sim.subpopulations.id, "sum(current_counts*freqs800[applyValue,]) + sum(current_counts_subs*freqs800_subs[applyValue,]);");
+				}
+				else{
+					epsilon_count_origin_tick = sapply(sim.subpopulations.id, "sum(current_counts*freqs800[applyValue,]);");
+				}
+				epsilon_freq_origin_tick = epsilon_count_origin_tick/sum(epsilon_count_origin_tick);
+			}
+			if(length(focal_mutations) == 0) epsilon_freq_origin_tick = rep('NA', length(sim.subpopulations));
+			epsilon_prop_new = (length(new_mutations) + length(new_subs))/(length(all_mutations) + length(all_subs));
+		}
+		else{
+			Topt_freq_origin_tick = rep('NA', length(sim.subpopulations));
+			neutral_freq_origin_tick = rep('NA', length(sim.subpopulations));
+			epsilon_freq_origin_tick = rep('NA', length(sim.subpopulations));
+			Topt_prop_new = 'NA';
+			neutral_prop_new = 'NA';
+			epsilon_prop_new = 'NA';
+		}
+		Topt_prop_new = rep(Topt_prop_new, length(sim.subpopulations));
+		neutral_prop_new = rep(neutral_prop_new, length(sim.subpopulations));
+		epsilon_prop_new = rep(epsilon_prop_new, length(sim.subpopulations));
+
+
+		origin_subpop = sim.subpopulations.id;
 		Topt_count = sapply(origin_subpop, "sum(c(focal_subpop.individuals.haplosomes.mutationsOfType(m2).subpopID, sim.substitutionsOfType(m2).subpopID) == applyValue);");
+		Topt_freq = Topt_count/sum(Topt_count);
 		epsilon_count = sapply(origin_subpop, "sum(c(focal_subpop.individuals.haplosomes.mutationsOfType(m4).subpopID, sim.substitutionsOfType(m4).subpopID) == applyValue);");
+		epsilon_freq = epsilon_count/sum(epsilon_count);
 		neutral_count = sapply(origin_subpop, "sum(c(focal_subpop.individuals.haplosomes.mutationsOfType(m3).subpopID, sim.substitutionsOfType(m3).subpopID) == applyValue);");
+		neutral_freq = neutral_count/sum(neutral_count);
 		Topt_mean_contribution = sapply(origin_subpop, "mean(calcAdditiveContributionOrigin(focal_subpop_id,applyValue, m2));");
 		epsilon_mean_contribution = sapply(origin_subpop, "mean(calcAdditiveContributionOrigin(focal_subpop_id,applyValue, m4));");
 		Topt_VA = sapply(origin_subpop, "var(calcAdditiveContributionOrigin(focal_subpop_id,applyValue, m2));");
@@ -1575,13 +1676,13 @@ function (string) mutationalOrigins(string header_string, integer focal_subpop_i
 		add = paste(lines, sep = "\n");
 	}
 	else{
-		add = NULL;
+		add = 'NA';
 	}
 	return(add);
 }
 
 function (void) writeMutationalOrigins(string outfile, logical header, integer focal_subpop_ids){
-	header_string = "tick,subpop,subpop_temp,origin_subpop,origin_temp,Topt_count,epsilon_count,neutral_count,Topt_mean_contribution,epsilon_mean_contribution,Topt_VA,epsilon_VA";
+	header_string = "tick,subpop,subpop_temp,origin_subpop,origin_temp,Topt_count,epsilon_count,neutral_count,Topt_mean_contribution,epsilon_mean_contribution,Topt_VA,epsilon_VA,Topt_freq,epsilon_freq,neutral_freq,Topt_freq_origin_tick,epsilon_freq_origin_tick,neutral_freq_origin_tick,Topt_prop_new,epsilon_prop_new,neutral_prop_new";
 	if(header){
 		writeFile(outfile, header_string);
 		return;
