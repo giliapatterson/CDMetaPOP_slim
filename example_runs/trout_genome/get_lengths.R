@@ -12,14 +12,15 @@ trout_arms <- trout_contigs |> mutate(length = nchar(Consensus)) |>
 # Compute size of each linkage group
 trout_chroms <- trout_arms |> group_by(Chromosome) |>
   reframe(Length = sum(Length))
-# Remove sex chromosome (29) and compute recombination rates for smaller chromosomes
+# Remove sex chromosome (30) and compute recombination rates for smaller chromosomes
 scale = 0.1
 trout_genome <- trout_chroms |> mutate(recombination_rate = 3) |>
   mutate(Length = Length*scale, recombination_rate = recombination_rate/scale,
          mutation_rate = 1e-7) |>
-  filter(Chromosome != 29)
+  filter(Chromosome != 30)
 # Write lengths to file
 write_csv(trout_genome,"climate_change_McKenzie/trout_genome.csv")
+write_csv(trout_genome,"thermal_performance/trout_genome.csv")
 
 # # Compute average recombination rate for non-centromeres
 # overall_rr <- 3 #cM/mB
