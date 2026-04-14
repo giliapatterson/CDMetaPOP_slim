@@ -1604,6 +1604,7 @@ function (string) mutationalOrigins(string header_string, integer focal_subpop_i
 			
 			all_mutations = unique(focal_subpop.haplosomes.mutationsOfType(m3));
 			focal_mutations = all_mutations[all_mutations.originTick <= MUTATION_ORIGIN_TICK];
+			new_mutations = all_mutations[all_mutations.originTick > MUTATION_ORIGIN_TICK];
 			all_subs = sim.substitutionsOfType(m3);
 			focal_subs = all_subs[all_subs.originTick <= MUTATION_ORIGIN_TICK];
 			new_subs = all_subs[all_subs.originTick > MUTATION_ORIGIN_TICK];
@@ -1625,6 +1626,7 @@ function (string) mutationalOrigins(string header_string, integer focal_subpop_i
 			
 			all_mutations = unique(focal_subpop.haplosomes.mutationsOfType(m4));
 			focal_mutations = all_mutations[all_mutations.originTick <= MUTATION_ORIGIN_TICK];
+			new_mutations = all_mutations[all_mutations.originTick > MUTATION_ORIGIN_TICK];
 			all_subs = sim.substitutionsOfType(m4);
 			focal_subs = all_subs[all_subs.originTick <= MUTATION_ORIGIN_TICK];
 			new_subs = all_subs[all_subs.originTick > MUTATION_ORIGIN_TICK];
