@@ -219,6 +219,8 @@ In RunVars:
 
 `mutation_output_subpops`: Patch IDs for chosen subset of patches. Should correspond to the `PatchID` column in PatchVars and be separated by "|", e.g. "0|1|2|3|4|5".
 
+`mutation_origin_year`: Year to record frequencies of each mutation in each patch.
+
 ### Output
 
 As for the quantitative trait model, CDMetaPOP_slim will output two additional files, QTL_overall.csv and QTL subpops.csv. These files contain the same information as for the quantitative trait model, but separated by $T_{opt}$ and $\epsilon$.
