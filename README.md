@@ -221,6 +221,12 @@ In RunVars:
 
 `mutation_origin_year`: Year to record frequencies of each mutation in each patch.
 
+Optional independent temperature effect, specified in PopVars:
+
+`independent_environment_mean`, `independent_environment_sd`: Parameters of a normal distribution for the independent effect of temperature on performance. The figure below shows examples of thermal performance curves for `independent_environment_mean` = 10, `independent_environment_sd` = 5, and `epsilon` = 7.
+
+<img src="example_runs/evolution_of_tpc/tpc_with_environment.png" alt="Examples of performance curves.">
+
 ### Output
 
 As for the quantitative trait model, CDMetaPOP_slim will output two additional files, QTL_overall.csv and QTL subpops.csv. These files contain the same information as for the quantitative trait model, but separated by $T_{opt}$ and $\epsilon$.
@@ -295,6 +301,18 @@ example_runs/trout_genome/thermal_performance
 This example runs on the same 32 chromosome Westslope cutthroat trout genome as above. 
 
 To run the script, navigate to the `example_runs/trout_genome/thermal_performance` directory and run:
+
+```
+bash run_and_plot.sh
+```
+
+### Modeling evolution of thermal performance curves with an independent temperature effect and plotting the origin of adaptive mutations
+
+```
+example_runs/evolution_of_tpc
+```
+
+To run the script, navigate to the `example_runs/evolution_of_tpc` directory and run:
 
 ```
 bash run_and_plot.sh

@@ -102,7 +102,7 @@ initialize() {
 	defaults = Dictionary(
 		//"SEED", getSeed(), // random seed
 		"SEED", 5290, // random seed
-		"RUNVARS_FILE", 'parameters/slim_output/slim_parameters/run4/RunVars_slim.csv', // File containing run info
+		"RUNVARS_FILE", 'parameters/slim_output/slim_parameters/run1/RunVars_slim.csv', // File containing run info
 		//"RUNVARS_FILE", 'QTL_test/RunVars_slim.csv', // File containing run info
 		//"PARAM_FOLDER", "./", // Folder containing parameter files
 		"PARAM_FOLDER", './', // Folder containing parameter files
@@ -1056,6 +1056,13 @@ function (float)thermal_performance(float temperature, float Topt, float epsilon
 	x = (temperature-Topt)/epsilon;
 	cost_scaling = pmax(0.0, pmin(1 - abs(Topt - Topt_baseline)*Topt_cost - abs(epsilon - epsilon_baseline)*epsilon_cost, 1.0));
    P = pmax(0.0, exp(x)*(1-x)*cost_scaling);
+   // Independent environmental effect
+   if(!isNULL(POPVARS.getValue('independent_environment_mean'))){
+   	env_mean = asFloat(POPVARS.getValue('independent_environment_mean'));
+   	env_sd = asFloat(POPVARS.getValue('independent_environment_sd'));
+   	scaling = dnorm(temperature, mean = env_mean, sd = env_sd)/dnorm(env_mean, mean = env_mean, sd = env_sd);
+   	P = P*scaling;
+   }
    return(P);
 }
 

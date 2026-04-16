@@ -337,6 +337,9 @@ for(run in 1:nruns){
       if(has_name(popvars, "qtl_mutations_initial")){
         popvars_used <- c(popvars_used, "qtl_mutations_initial")
       }
+      if(has_name(popvars, "independent_environment_mean")){
+        popvars_used <- c(popvars_used, "independent_environment_mean", "independent_environment_sd")
+      }
     }
   }
   # For gene initialization method "random", check that number of alleles is a single number
