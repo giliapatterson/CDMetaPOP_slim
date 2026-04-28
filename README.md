@@ -65,6 +65,12 @@ mamba activate cdmetapop_slim
     
     CDMetaPOP_slim will use as many cores as possible up to the number specified by `--cores`.
 
+- To record tree sequences for use with [pyslim](https://tskit.dev/pyslim/docs/latest/overview.html):
+
+    ```
+    python CDMetaPOP_slim.py -d ../example_runs/small_WCT_parameters/ -i RunVars_WCT.csv -o cdmetapop_slim_results_small --no-filetime -s 20329 --cores 20 --treeseq
+    ```
+
 ## Quantitative traits
 
 ### Model

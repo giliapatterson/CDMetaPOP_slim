@@ -102,9 +102,8 @@ initialize() {
 	defaults = Dictionary(
 		//"SEED", getSeed(), // random seed
 		"SEED", 5290, // random seed
-		"RUNVARS_FILE", 'parameters/slim_output/slim_parameters/run1/RunVars_slim.csv', // File containing run info
-		//"RUNVARS_FILE", 'QTL_test/RunVars_slim.csv', // File containing run info
-		//"PARAM_FOLDER", "./", // Folder containing parameter files
+		//"RUNVARS_FILE", 'parameters/slim_output/slim_parameters/run1/RunVars_slim.csv', // File containing run info
+		"RUNVARS_FILE", 'parameters/slim_output/slim_parameters/run4/RunVars_slim.csv',
 		"PARAM_FOLDER", './', // Folder containing parameter files
 		"IND_OUT_FOLDER", "./", // Folder for individual output
 		"ALLPOPS_OUT", "./summary_popAllTime.csv",
@@ -113,8 +112,10 @@ initialize() {
 		"QTL_SUBPOPS_OUT", "./QTL_subpops.csv",
 		"MUTATION_OUTPUT_FILE", "./mutation_origins.csv",
 		"FINISHED", "./finished.txt",
-		"SCALEPOPSIZE", 1, // Decrease (or increase) carrying capacities for testing
-		"NPATCHES", 'all' // Decrease number of patches for testing
+		"SCALEPOPSIZE", 1.0, // Decrease (or increase) carrying capacities for testing
+		"NPATCHES", 'all', // Decrease number of patches for testing
+		"TREESEQ", 'false',
+		"TREESEQ_FILE", './trees'
 	);
 	
 	// Set up parameters
@@ -127,6 +128,7 @@ initialize() {
 	initializeSLiMModelType("nonWF");
 	initializeSLiMOptions(keepPedigrees=T);
 	initializeSex("A");
+	if(TREESEQ == 'true') initializeTreeSeq();
 	
 	// Read in run vars file and get info
 	defineConstant("RUNVARS", readCSV(RUNVARS_FILE));
@@ -895,6 +897,7 @@ late() {
 }
 		
 RUNTIME late() {
+	if(TREESEQ == 'true') sim.treeSeqOutput(TREESEQ_FILE);
 	writeFile(FINISHED, "Simulation finished");
 	print("Simulation finished in " + (clock() - start) + " seconds.");
 	sim.simulationFinished(); 

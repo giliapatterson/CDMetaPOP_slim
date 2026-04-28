@@ -21,6 +21,8 @@ parser.set_defaults(filetime=True)
 parser.add_argument('--rerun', action='store_true')
 parser.add_argument('--no-rerun', dest='rerun', action='store_false')
 parser.set_defaults(rerun=False)
+parser.add_argument('--treeseq', action='store_true')
+parser.set_defaults(treeseq=False)
 parser.add_argument('-c','--cores', type = int, default = 1)
 args = parser.parse_args()
 
@@ -132,6 +134,8 @@ def run_slim(run_df, sim_info_q):
                 -d 'QTL_OUT=\"{rep_output_folder + "QTL_overall.csv"}\"'\
                 -d 'QTL_SUBPOPS_OUT=\"{rep_output_folder + "QTL_subpops.csv"}\"'\
                 -d 'MUTATION_OUTPUT_FILE=\"{rep_output_folder + "mutation_origins.csv"}\"'\
+                -d 'TREESEQ = \"{str(args.treeseq).lower()}\"' \
+                -d 'TREESEQ_FILE =\"{rep_output_folder + "trees"}\"'\
                 -d 'FINISHED=\"{simulation_finished}\"' {script_dir}/scripts/cdmetapop_slim.slim"
             stdout_file = f"{rep_output_folder}log.txt"
             with open(stdout_file, 'w') as f:
