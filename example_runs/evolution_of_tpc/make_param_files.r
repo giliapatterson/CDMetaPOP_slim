@@ -99,7 +99,7 @@ for (i in 1:nrow(parameter_combinations)){
   
   ## QTL variables
   genome = 'genome.csv'
-  qtl_prop_genome = 0.5
+  qtl_prop_genome = 1.0
   Topt_baseline = 10.0
   epsilon_baseline = 7.0
   Topt_VE = 1.0
