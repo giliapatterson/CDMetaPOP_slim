@@ -317,7 +317,7 @@ first(){
 	// Set initial mutations and phenotypes for trait
 	if(QTL){
 		if(!isNULL(POPVARS.getValue('qtl_mutations_initial')) & !GENOME_FILE){
-			nmutations = POPVARS.getValue('qtl_mutations_initial');
+			nmutations = asInteger(POPVARS.getValue('qtl_mutations_initial'));
 			if(nmutations > 0){
 				mut_haplosomes = sample(sim.subpopulations.individuals.haplosomes, nmutations, replace = T);
 				mut_positions = sample(QTL_POSITIONS, nmutations, replace = T);
@@ -328,7 +328,7 @@ first(){
 			}
 		}
 		if(!isNULL(POPVARS.getValue('qtl_mutations_initial')) & GENOME_FILE){
-			nmutations = POPVARS.getValue('qtl_mutations_initial');
+			nmutations = asInteger(POPVARS.getValue('qtl_mutations_initial'));
 			if(nmutations > 0){
 				mut_chroms = sample(sim.chromosomes, nmutations, replace = T, weights = sim.chromosomes.length/sum(sim.chromosomes.length));
 				for(chrom in mut_chroms){
@@ -662,6 +662,12 @@ late(){
 	}
 	defineGlobal("DEATHS1", nkilled.getValue("nkilled_subpops"));
 	defineGlobal("DEATHS1_AGE", nkilled.getValue("nkilled_ages"));
+	if(sum(sim.subpopulations.individualCount) == 0){
+		if(TREESEQ == 'true') sim.treeSeqOutput(TREESEQ_FILE);
+		writeFile(FINISHED, "Simulation extinct");
+		print("Extinct in " + (clock() - start) + " seconds.");
+		sim.simulationFinished();
+	}
 	
 }
 
@@ -674,7 +680,12 @@ late(){
 	kill = individuals[runif(length(individuals)) < prob_dies];
 	sim.killIndividuals(kill);
 	print(length(kill) + " individuals died.");
-
+	if(sum(sim.subpopulations.individualCount) == 0){
+		if(TREESEQ == 'true') sim.treeSeqOutput(TREESEQ_FILE);
+		writeFile(FINISHED, "Simulation extinct");
+		print("Extinct in " + (clock() - start) + " seconds.");
+		sim.simulationFinished();
+	}
 
 }
 
@@ -781,6 +792,12 @@ late() {
 		print(length(kill) + " individuals killed");
 		sim.killIndividuals(kill);
 	}
+	if(sum(sim.subpopulations.individualCount) == 0){
+		if(TREESEQ == 'true') sim.treeSeqOutput(TREESEQ_FILE);
+		writeFile(FINISHED, "Simulation extinct");
+		print("Extinct in " + (clock() - start) + " seconds.");
+		sim.simulationFinished();
+	}
 }
 
 late() {
@@ -796,6 +813,12 @@ late() {
 	}
 	defineGlobal("DEATHS2", nkilled.getValue("nkilled_subpops"));
 	defineGlobal("DEATHS2_AGE", nkilled.getValue("nkilled_ages"));	
+	if(sum(sim.subpopulations.individualCount) == 0){
+		if(TREESEQ == 'true') sim.treeSeqOutput(TREESEQ_FILE);
+		writeFile(FINISHED, "Simulation extinct");
+		print("Extinct in " + (clock() - start) + " seconds.");
+		sim.simulationFinished();
+	}
 	
 }
 
@@ -810,6 +833,12 @@ late(){
 	print(length(kill) + " individuals died.");
 	
 	defineGlobal("N2", sim.subpopulations.individualCount);
+	if(sum(sim.subpopulations.individualCount) == 0){
+		if(TREESEQ == 'true') sim.treeSeqOutput(TREESEQ_FILE);
+		writeFile(FINISHED, "Simulation extinct");
+		print("Extinct in " + (clock() - start) + " seconds.");
+		sim.simulationFinished();
+	}
 }
 
 OUTPUT_TICKS late(){
@@ -882,10 +911,11 @@ late() {
 		defineGlobal("EPSILON_EFFECTS", c(sim.subpopulations.individuals.haplosomes.mutationsOfType(m4).selectionCoeff, sim.substitutionsOfType(m4).selectionCoeff));
 		updatePlotTPC();
 	}
-	if (sum(sim.subpopulations.individualCount) == 0){
+	if(sum(sim.subpopulations.individualCount) == 0){
+		if(TREESEQ == 'true') sim.treeSeqOutput(TREESEQ_FILE);
 		writeFile(FINISHED, "Simulation extinct");
-		print("Simulation extinct in " + (clock() - start) + " seconds.");
-		stop("Global extinction in cycle " + sim.cycle + ".");
+		print("Extinct in " + (clock() - start) + " seconds.");
+		sim.simulationFinished();
 	}
 	if (sum(sim.subpopulations.individualCount) > 500000){
 		stop("Global population too big in cycle " + sim.cycle + ".");
