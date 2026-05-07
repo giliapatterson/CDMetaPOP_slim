@@ -103,7 +103,7 @@ initialize() {
 		//"SEED", getSeed(), // random seed
 		"SEED", 5290, // random seed
 		//"RUNVARS_FILE", 'parameters/slim_output/slim_parameters/run1/RunVars_slim.csv', // File containing run info
-		"RUNVARS_FILE", 'parameters/slim_output/slim_parameters/run4/RunVars_slim.csv',
+		"RUNVARS_FILE", 'parameters_vulnerability/slim_output/slim_parameters/run5/RunVars_slim.csv',
 		"PARAM_FOLDER", './', // Folder containing parameter files
 		"IND_OUT_FOLDER", "./", // Folder for individual output
 		"ALLPOPS_OUT", "./summary_popAllTime.csv",
@@ -112,7 +112,7 @@ initialize() {
 		"QTL_SUBPOPS_OUT", "./QTL_subpops.csv",
 		"MUTATION_OUTPUT_FILE", "./mutation_origins.csv",
 		"FINISHED", "./finished.txt",
-		"SCALEPOPSIZE", 1.0, // Decrease (or increase) carrying capacities for testing
+		"SCALEPOPSIZE",1.0, // Decrease (or increase) carrying capacities for testing
 		"NPATCHES", 'all', // Decrease number of patches for testing
 		"TREESEQ", 'false',
 		"TREESEQ_FILE", './trees'
@@ -663,10 +663,9 @@ late(){
 	defineGlobal("DEATHS1", nkilled.getValue("nkilled_subpops"));
 	defineGlobal("DEATHS1_AGE", nkilled.getValue("nkilled_ages"));
 	if(sum(sim.subpopulations.individualCount) == 0){
-		if(TREESEQ == 'true') sim.treeSeqOutput(TREESEQ_FILE);
+		if(TREESEQ == 'true') sim.treeSeqOutput(TREESEQ_FILE, overwriteDirectory=T);
 		writeFile(FINISHED, "Simulation extinct");
-		print("Extinct in " + (clock() - start) + " seconds.");
-		sim.simulationFinished();
+		stop("Extinct in " + (clock() - start) + " seconds.");
 	}
 	
 }
@@ -681,10 +680,9 @@ late(){
 	sim.killIndividuals(kill);
 	print(length(kill) + " individuals died.");
 	if(sum(sim.subpopulations.individualCount) == 0){
-		if(TREESEQ == 'true') sim.treeSeqOutput(TREESEQ_FILE);
+		if(TREESEQ == 'true') sim.treeSeqOutput(TREESEQ_FILE, overwriteDirectory=T);
 		writeFile(FINISHED, "Simulation extinct");
-		print("Extinct in " + (clock() - start) + " seconds.");
-		sim.simulationFinished();
+		stop("Extinct in " + (clock() - start) + " seconds.");
 	}
 
 }
@@ -793,10 +791,9 @@ late() {
 		sim.killIndividuals(kill);
 	}
 	if(sum(sim.subpopulations.individualCount) == 0){
-		if(TREESEQ == 'true') sim.treeSeqOutput(TREESEQ_FILE);
+		if(TREESEQ == 'true') sim.treeSeqOutput(TREESEQ_FILE, overwriteDirectory=T);
 		writeFile(FINISHED, "Simulation extinct");
-		print("Extinct in " + (clock() - start) + " seconds.");
-		sim.simulationFinished();
+		stop("Extinct in " + (clock() - start) + " seconds.");
 	}
 }
 
@@ -814,10 +811,9 @@ late() {
 	defineGlobal("DEATHS2", nkilled.getValue("nkilled_subpops"));
 	defineGlobal("DEATHS2_AGE", nkilled.getValue("nkilled_ages"));	
 	if(sum(sim.subpopulations.individualCount) == 0){
-		if(TREESEQ == 'true') sim.treeSeqOutput(TREESEQ_FILE);
+		if(TREESEQ == 'true') sim.treeSeqOutput(TREESEQ_FILE, overwriteDirectory=T);
 		writeFile(FINISHED, "Simulation extinct");
-		print("Extinct in " + (clock() - start) + " seconds.");
-		sim.simulationFinished();
+		stop("Extinct in " + (clock() - start) + " seconds.");
 	}
 	
 }
@@ -834,10 +830,9 @@ late(){
 	
 	defineGlobal("N2", sim.subpopulations.individualCount);
 	if(sum(sim.subpopulations.individualCount) == 0){
-		if(TREESEQ == 'true') sim.treeSeqOutput(TREESEQ_FILE);
+		if(TREESEQ == 'true') sim.treeSeqOutput(TREESEQ_FILE, overwriteDirectory=T);
 		writeFile(FINISHED, "Simulation extinct");
-		print("Extinct in " + (clock() - start) + " seconds.");
-		sim.simulationFinished();
+		stop("Extinct in " + (clock() - start) + " seconds.");
 	}
 }
 
@@ -912,14 +907,14 @@ late() {
 		updatePlotTPC();
 	}
 	if(sum(sim.subpopulations.individualCount) == 0){
-		if(TREESEQ == 'true') sim.treeSeqOutput(TREESEQ_FILE);
+		if(TREESEQ == 'true') sim.treeSeqOutput(TREESEQ_FILE, overwriteDirectory=T);
 		writeFile(FINISHED, "Simulation extinct");
-		print("Extinct in " + (clock() - start) + " seconds.");
-		sim.simulationFinished();
+		stop("Extinct in " + (clock() - start) + " seconds.");
 	}
 	if (sum(sim.subpopulations.individualCount) > 500000){
 		stop("Global population too big in cycle " + sim.cycle + ".");
 	}
+	if(TREESEQ == 'true') sim.treeSeqRememberIndividuals(sim.subpopulations.individuals);
 	print("Tick " + community.tick + " complete: " + (clock() - tickstart) + " seconds."); 
 	print("Pop size: " + sum(sim.subpopulations.individualCount) + " Total K: " + sum(PATCHKS));
 	print("-----------------------------------------------------------------------------");
@@ -927,7 +922,7 @@ late() {
 }
 		
 RUNTIME late() {
-	if(TREESEQ == 'true') sim.treeSeqOutput(TREESEQ_FILE);
+	if(TREESEQ == 'true') sim.treeSeqOutput(TREESEQ_FILE, overwriteDirectory=T);
 	writeFile(FINISHED, "Simulation finished");
 	print("Simulation finished in " + (clock() - start) + " seconds.");
 	sim.simulationFinished(); 
@@ -1513,13 +1508,13 @@ function (void) writeQTLOutputOverall(string outfile, logical header, logical qt
 		Topt_Ve = 'NA';
 		Topt_heritability = 'NA';
 		Topt_alleles = 'NA';
-		Topt_effect_size = 'NA';
+		Topt_avg_effect_size = 'NA';
 		epsilon_variance = 'NA';
 		epsilon_Va = 'NA';
 		epsilon_Ve = 'NA';
 		epsilon_heritability = 'NA';
 		epsilon_alleles = 'NA';
-		epsilon_effect_size = 'NA';
+		epsilon_avg_effect_size = 'NA';
 	}
 	overall_line = paste(executeLambda("c(" + overall_header + ");"), sep = ",");
 	writeFile(outfile, overall_line, append = T);
