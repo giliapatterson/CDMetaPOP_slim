@@ -858,10 +858,12 @@ late(){
 
 MUTATION_ORIGIN_TICK late(){
 	if(QTL_TPC){
-		counts = matrix(sapply(sim.subpopulations, "sim.mutationCounts(applyValue, sim.mutations);"), nrow = length(sim.mutations));
-		freqs = apply(counts, 0, 'applyValue/sum(applyValue);');
-		for(i in seqAlong(sim.mutations)){ 	
-			sim.mutations[i].setValue('freqs800', freqs[,i]);
+		if(length(sim.mutations) > 0){
+			counts = matrix(sapply(sim.subpopulations, "sim.mutationCounts(applyValue, sim.mutations);"), nrow = length(sim.mutations));
+			freqs = apply(counts, 0, 'applyValue/sum(applyValue);');
+			for(i in seqAlong(sim.mutations)){ 	
+				sim.mutations[i].setValue('freqs800', freqs[,i]);
+			}
 		}
 		sim.substitutions.setValue('freqs800', sim.subpopulations.individualCount/sum(sim.subpopulations.individualCount));
 	}
