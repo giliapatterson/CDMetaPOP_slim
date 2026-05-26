@@ -8,8 +8,6 @@ dependencies:
     - polars
     - numpy
     - scipy
-    - snakemake
-    - jupyterlab
     - R
     - r-tidyverse
     - r-argparse
