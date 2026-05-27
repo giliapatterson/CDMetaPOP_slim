@@ -409,7 +409,10 @@ reproduction(NULL, "F") {
 				defineGlobal("BIRTHS", new_births);
 				// Number of surviving eggs including egg mortality
 				//neggs = rbinom(1, size = pre_mort_neggs, prob = 1- PATCHVARS.getValue("Mortality Eggs")[subpop.id]);
-				neggs = asInteger(round(pre_mort_neggs*(1- PATCHVARS.getValue("Mortality Eggs")[subpop.id])));
+				neggs = pre_mort_neggs*(1- PATCHVARS.getValue("Mortality Eggs")[subpop.id]);
+				if (!isInteger(neggs)){
+					neggs = asInteger(round(neggs));
+				}
 				new_eggdeaths = EGGDEATHS;
 				new_eggdeaths[subpop.id] = EGGDEATHS[subpop.id] + (pre_mort_neggs - neggs);
 				defineGlobal("EGGDEATHS", new_eggdeaths);
@@ -761,10 +764,8 @@ function (integer)num_eggs(object<Individual> ind){
 			if(E_mu > 0) noffspring = rpois(1, E_mu); else noffspring = 0;
 			return(noffspring);
 		}
-		else{
-			print("Egg_Mean_ans" + POPVARS.getValue("Egg_Mean_ans") + "offno" + POPVARS.getValue("offno") + " not supported yet. Using 2 offspring per individual.");
-			return(2);
-		}
+		print("Egg_Mean_ans" + POPVARS.getValue("Egg_Mean_ans") + "offno" + POPVARS.getValue("offno") + " not supported yet. Using 2 offspring per individual.");
+		return(2);
 	}
 	else{
 		if(POPVARS.getValue("offno") == 2){
@@ -773,10 +774,16 @@ function (integer)num_eggs(object<Individual> ind){
 			if(E_mu > 0) noffspring = rpois(1, E_mu); else noffspring = 0;
 			return(noffspring);
 		}
-		else{
-			print("offno" + POPVARS.getValue("offno") + " not supported yet. Using 2 offspring per individual.");
-			return(2);
+		if(POPVARS.getValue("offno") == 4){
+			age_i = which(CLASSVARS.getValue("Age class") == age_class(ind, 'age'));
+			mean = CLASSVARS.getValue("Fecundity Ind")[age_i];
+			sd = CLASSVARS.getValue("Fecundity Ind StDev")[age_i];
+			noffspring = rnorm(1, mean, sd);
+			if(noffspring < 0) noffspring = 0; else noffspring = asInteger(round(noffspring));
+			return(noffspring);
 		}
+		print("offno" + POPVARS.getValue("offno") + " not supported yet. Using 2 offspring per individual.");
+		return(2);
 	}
 }
 

@@ -167,7 +167,7 @@ for(run in 1:nruns){
     classvars_used = c("Age class", "Body Size Mean (mm)", "Body Size Std (mm)", "Distribution",
                        "Age Mortality Out %", "Age Mortality Back %", "Migration Out Prob",
                        "Migration Back Prob", "Straying Prob", "Dispersal Prob",
-                       "Maturation_F", "Maturation_M", "Fecundity Ind")
+                       "Maturation_F", "Maturation_M", "Fecundity Ind", "Fecundity Ind StDev")
   }
   classvars_out <- classvars |> select(all_of(classvars_used))
   
@@ -193,6 +193,47 @@ for(run in 1:nruns){
   }
   if(has_name(patchvars, 'qtl_loci_initial') & !has_name(popvars, 'genome')){
     patchvars_used = c(patchvars_used, 'qtl_dpe_initial', 'qtl_loci_initial')
+  }
+  # Check strings, if so convert to a number
+  growthtemps_numeric = as.numeric(patchvars$GrowthTemperatureOut)
+  num_string = sum(is.na(growthtemps_numeric))
+  if(num_string > 0){
+    patchvars$GrowthTemperatureOut = 0
+  }
+  growthsd_numeric = as.numeric(patchvars$GrowthTemperatureOutStDev)
+  num_string = sum(is.na(growthsd_numeric))
+  if(num_string > 0){
+    patchvars$GrowthTemperatureOutStDev = 0
+  }
+  growthtemps_numeric = as.numeric(patchvars$GrowthTemperatureBack)
+  num_string = sum(is.na(growthtemps_numeric))
+  if(num_string > 0){
+    patchvars$GrowthTemperatureBack = 0
+  }
+  growthsd_numeric = as.numeric(patchvars$GrowthTemperatureBackStDev)
+  num_string = sum(is.na(growthsd_numeric))
+  if(num_string > 0){
+    patchvars$GrowthTemperatureBackStDev = 0
+  }
+  nums = as.numeric(patchvars$GrowDaysOut)
+  num_string = sum(is.na(nums))
+  if(num_string > 0){
+    patchvars$GrowDaysOut = 0
+  }
+  nums = as.numeric(patchvars$GrowDaysBack)
+  num_string = sum(is.na(nums))
+  if(num_string > 0){
+    patchvars$GrowDaysBack = 0
+  }
+  nums = as.numeric(patchvars$GrowDaysOutStDev)
+  num_string = sum(is.na(nums))
+  if(num_string > 0){
+    patchvars$GrowDaysOutStDev = 0
+  }
+  nums = as.numeric(patchvars$GrowDaysBackStDev)
+  num_string = sum(is.na(nums))
+  if(num_string > 0){
+    patchvars$GrowDaysBackStDev = 0
   }
   
   patchvars_out <- select(patchvars, all_of(patchvars_used))                    
