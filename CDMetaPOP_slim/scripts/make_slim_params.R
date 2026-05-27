@@ -1,4 +1,4 @@
-suppressPackageStartupMessages(library(tidyverse))
+library(tidyverse)
 library(argparse)
 library(glue)
 
