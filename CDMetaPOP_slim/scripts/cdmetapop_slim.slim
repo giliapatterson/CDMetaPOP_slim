@@ -103,7 +103,7 @@ initialize() {
 		//"SEED", getSeed(), // random seed
 		"SEED", 5290, // random seed
 		//"RUNVARS_FILE", 'parameters/slim_output/slim_parameters/run1/RunVars_slim.csv', // File containing run info
-		"RUNVARS_FILE", 'parameters_vulnerability/slim_output/slim_parameters/run5/RunVars_slim.csv',
+		"RUNVARS_FILE", 'parameters_vulnerability/slim_output/slim_parameters/run2/RunVars_slim.csv',
 		"PARAM_FOLDER", './', // Folder containing parameter files
 		"IND_OUT_FOLDER", "./", // Folder for individual output
 		"ALLPOPS_OUT", "./summary_popAllTime.csv",
@@ -111,6 +111,7 @@ initialize() {
 		"QTL_OUT", "./QTL_overall.csv",
 		"QTL_SUBPOPS_OUT", "./QTL_subpops.csv",
 		"MUTATION_OUTPUT_FILE", "./mutation_origins.csv",
+		"MUTATION_EFFECTS_OUTPUT_FILE", "./mutation_effects.csv",
 		"FINISHED", "./finished.txt",
 		"SCALEPOPSIZE",1.0, // Decrease (or increase) carrying capacities for testing
 		"NPATCHES", 'all', // Decrease number of patches for testing
@@ -156,6 +157,7 @@ initialize() {
 		}
 		defineConstant('MUTATION_ORIGIN_TICK', asInteger(RUNVARS.getValue('mutation_origin_year')));
 		writeMutationalOrigins(MUTATION_OUTPUT_FILE, T, MUTATION_OUTPUT_SUBPOP_IDS);
+		writeMutationEffects(MUTATION_EFFECTS_OUTPUT_FILE, T);
 	}
 	// Placeholder
 	if(isNULL(RUNVARS.getValue('mutation_output_years'))) defineConstant("MUTATION_OUTPUT_TICKS", 1);
@@ -761,6 +763,14 @@ late(){
 	for (dest in unique(destinations)){dest.takeMigrants(dispersers[destinations == dest]);}
 }
 
+late(){
+	if(QTL){
+		print("Writing QTL output");
+		writeQTLOutputOverall(QTL_OUT, header = F, qtl_tpc = QTL_TPC);
+		writeQTLOutputSubpops(QTL_SUBPOPS_OUT, header = F, qtl_tpc = QTL_TPC);
+	}
+}
+
 late() {
 	// QTL selection
 	if(QTL & !QTL_TPC){
@@ -849,11 +859,6 @@ late(){
 	writeSubpopOutput(ALLPOPS_OUT, header = F);
 	print("Writing output by class");
 	writeClassOutput(BYCLASS, header = F);
-	if(QTL){
-		print("Writing QTL output");
-		writeQTLOutputOverall(QTL_OUT, header = F, qtl_tpc = QTL_TPC);
-		writeQTLOutputSubpops(QTL_SUBPOPS_OUT, header = F, qtl_tpc = QTL_TPC);
-	}
 }
 
 MUTATION_ORIGIN_TICK late(){
@@ -873,6 +878,8 @@ MUTATION_OUTPUT_TICKS late(){
 	if(QTL_TPC){
 		print("Writing origin of mutations");
 		writeMutationalOrigins(MUTATION_OUTPUT_FILE, F, MUTATION_OUTPUT_SUBPOP_IDS);
+		print("Writing mutation effects");
+		writeMutationEffects(MUTATION_EFFECTS_OUTPUT_FILE, F);
 	}
 }
 
@@ -1483,7 +1490,8 @@ function (void) writeQTLOutputOverall(string outfile, logical header, logical qt
 		Topt_variance = var(sim.subpopulations.individuals.getValue('Topt'));
 		Topt_Va = calcVA(sim.subpopulations.individuals, m2);
 		Topt_Ve = var(sim.subpopulations.individuals.getValue('Topt') - sim.subpopulations.individuals.sumOfMutationsOfType(m2));
-		Topt_heritability = Topt_Va/(Topt_Va + Topt_Ve);
+		//Topt_heritability = Topt_Va/(Topt_Va + Topt_Ve);
+		Topt_heritability = Topt_Va/Topt_variance;
 		Topt_alleles = length(unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2)));
 		Topt_avg_effect_size = mean(abs(c(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2).selectionCoeff, sim.substitutionsOfType(m2).selectionCoeff)));
 		epsilon_variance = var(sim.subpopulations.individuals.getValue('epsilon'));
@@ -1553,7 +1561,7 @@ function (void) writeQTLOutputSubpops(string outfile, logical header, logical qt
 			Topt_variance = var(subpop.individuals.getValue('Topt'));
 			Topt_Va = calcVA(subpop.individuals, m2);
 			Topt_Ve = var(subpop.individuals.getValue('Topt') - subpop.individuals.sumOfMutationsOfType(m2));
-			Topt_heritability = Topt_Va/(Topt_Va + Topt_Ve);
+			Topt_heritability = Topt_Va/Topt_variance;
 			Topt_alleles = length(unique(subpop.individuals.haplosomes.mutationsOfType(m2)));
 			Topt_avg_effect_size = mean(abs(c(subpop.individuals.haplosomes.mutationsOfType(m2).selectionCoeff, sim.substitutionsOfType(m2).selectionCoeff)));
 			avg_epsilon = mean(subpop.individuals.getValue('epsilon'));
@@ -1728,6 +1736,22 @@ function (void) writeMutationalOrigins(string outfile, logical header, integer f
 	}
 	lines = sapply(focal_subpop_ids, "mutationalOrigins(header_string, applyValue);");
 	writeFile(outfile, lines, append = T);
+	return;
+}
+function (void) writeMutationEffects(string outfile, logical header){
+	header_string = "tick,substitution,phenotype,effect";
+	if(header){
+		writeFile(outfile, header_string);
+		return;
+	}
+	topt_subs = unique(sim.substitutionsOfType(m2)).selectionCoeff;
+	topt_muts = unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2)).selectionCoeff;
+	epsilon_subs = unique(sim.substitutionsOfType(m4)).selectionCoeff;
+	epsilon_muts = unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(m4)).selectionCoeff;
+	if(length(topt_subs) > 0) writeFile(outfile, paste(sapply(topt_subs, "paste0(community.tick, ',', 'T', ',', 'Topt', ',', applyValue);"), sep = '\n'), append = T);
+	if(length(epsilon_subs) > 0) writeFile(outfile, paste(sapply(epsilon_subs, "paste0(community.tick, ',', 'T', ',', 'epsilon', ',', applyValue);"), sep = '\n'), append = T);
+	if(length(topt_muts) > 0) writeFile(outfile, paste(sapply(topt_muts, "paste0(community.tick, ',', 'F', ',', 'Topt', ',', applyValue);"), sep = '\n'), append = T);
+	if(length(epsilon_muts) > 0) writeFile(outfile, paste(sapply(epsilon_muts, "paste0(community.tick, ',', 'F', ',', 'epsilon', ',', applyValue);"), sep = '\n'), append = T);
 	return;
 }
 

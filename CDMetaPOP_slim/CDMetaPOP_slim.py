@@ -134,6 +134,7 @@ def run_slim(run_df, sim_info_q):
                 -d 'QTL_OUT=\"{rep_output_folder + "QTL_overall.csv"}\"'\
                 -d 'QTL_SUBPOPS_OUT=\"{rep_output_folder + "QTL_subpops.csv"}\"'\
                 -d 'MUTATION_OUTPUT_FILE=\"{rep_output_folder + "mutation_origins.csv"}\"'\
+                -d 'MUTATION_EFFECTS_OUTPUT_FILE=\"{rep_output_folder + "mutation_effects.csv"}\"'\
                 -d 'TREESEQ = \"{str(args.treeseq).lower()}\"' \
                 -d 'TREESEQ_FILE =\"{rep_output_folder + "trees"}\"'\
                 -d 'FINISHED=\"{simulation_finished}\"' {script_dir}/scripts/cdmetapop_slim.slim"
