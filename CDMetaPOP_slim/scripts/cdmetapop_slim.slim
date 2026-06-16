@@ -79,7 +79,7 @@ initialize() {
 		defineConstant("OUTPUT_TICKS", rev(seq(RUNTIME, 1, by = -output_split)));
 	}
 	// Read in popvars for every year
-	defineConstant("POPVARS_ALL", readCSV(PARAM_FOLDER + RUNVARS.getValue("Popvars")[0]));
+	defineConstant("POPVARS_ALL", readCSV(safe_path(PARAM_FOLDER, RUNVARS.getValue("Popvars")[0])));
 	// Is a QTL implemented, and is genome length specified or is a genome file specified?
 	if(!isNULL(POPVARS_ALL.getValue("genome_length")) | !isNULL(POPVARS_ALL.getValue("genome"))) defineConstant("QTL", T); else defineConstant("QTL", F);
 	if(!isNULL(POPVARS_ALL.getValue("genome"))) defineConstant("GENOME_FILE", T); else defineConstant("GENOME_FILE", F);
@@ -122,7 +122,7 @@ initialize() {
 		initializeMutationType("m2", 0.5, "s", QTL_PHENO_EFF);
 		initializeMutationType("m3", 0.5, "f", 0.0);
 		initializeGenomicElementType("g2", c(m2, m3), c(QTL_PROP_GENOME, 1.0-QTL_PROP_GENOME));
-		genome = readCSV(PARAM_FOLDER + POPVARS.getValue('genome')[0]);
+		genome = readCSV(safe_path(PARAM_FOLDER, POPVARS.getValue('genome')[0]));
 		for(i in 0:(genome.nrow-1)){
 			row = genome.subsetRows(i);
 			id = row.getValue('Chromosome');
@@ -740,6 +740,20 @@ RUNTIME late() {
 }
 
 // Helper functions
+// Safely join paths, handling both absolute and relative paths for cross-platform compatibility
+function (string)safe_path(string base_dir, string file_path){
+	// If file_path is absolute (starts with / or contains :\), use it directly
+	// Otherwise concatenate with base_dir, ensuring proper separator
+	if (substr(file_path, 1, 1) == "/" || (nchar(file_path) >= 2 && substr(file_path, 2, 1) == ":"))
+		return file_path;
+	
+	// Ensure base_dir ends with /
+	if (nchar(base_dir) > 0 && substr(base_dir, nchar(base_dir), 1) != "/")
+		base_dir = base_dir + "/";
+	
+	return base_dir + file_path;
+}
+
 // Get age class of a vector of individuals
 function (integer)age_class(object<Individual> individuals, string method){
 	if(size(individuals) > 0){
@@ -1054,7 +1068,7 @@ function (void)setupConstantsFromPopVars(object<Dictionary>$ popvars)
 	// Read in patch info and set up patch ids
 	// If climate change is implemented, some variables in PatchVars can change over time
 	// So, if climate change is implemented, set up using the the first year of PatchVars
-	defineConstant("PATCHVARS_ALL", readCSV(PARAM_FOLDER + popvars.getValue("xyfilename")[0]));
+	defineConstant("PATCHVARS_ALL", readCSV(safe_path(PARAM_FOLDER, popvars.getValue("xyfilename")[0])));
 	if(!isNULL(PATCHVARS_ALL.getValue("year"))) defineGlobal("PATCHVARS", PATCHVARS_ALL.subsetRows(PATCHVARS_ALL.getValue('year') == 1));
 	else defineGlobal("PATCHVARS", PATCHVARS_ALL);
 	
@@ -1111,7 +1125,7 @@ function (void)setupConstantsFromPopVars(object<Dictionary>$ popvars)
 function (void)setupGlobalsFromPopVars(object<Dictionary>$ popvars){
 	
 	// Classvars
-	defineGlobal("CLASSVARS",readCSV(PARAM_FOLDER + PATCHVARS.getValue("classvars")[0]));
+	defineGlobal("CLASSVARS",readCSV(safe_path(PARAM_FOLDER, PATCHVARS.getValue("classvars")[0])));
 	
 	// Mating system and matrix
 	if(popvars.getValue('matemoveno') == '6'){
@@ -1119,7 +1133,7 @@ function (void)setupGlobalsFromPopVars(object<Dictionary>$ popvars){
 	}
 	if(popvars.getValue('matemoveno') == '9'){
 		defineGlobal("MATING", "matrix");
-		mate_matrix = readCSV(PARAM_FOLDER + popvars.getValue('mate_cdmat'), colNames = asString(PATCHIDS));
+		mate_matrix = readCSV(safe_path(PARAM_FOLDER, popvars.getValue('mate_cdmat')), colNames = asString(PATCHIDS));
 		if (NPATCHES != "all"){mate_matrix = mate_matrix.subsetColumns(PATCHIDS).subsetRows(PATCHIDS);}
 		// Convert to float (idk why this is so involved! There must be a better way.)
 		for (i in PATCHIDS){
@@ -1134,21 +1148,21 @@ function (void)setupGlobalsFromPopVars(object<Dictionary>$ popvars){
 	// Don't allow individuals to go to non-natal grounds in the back step
 	
 	// Migration out matrix
-	migration_matrix = readCSV(PARAM_FOLDER + popvars.getValue('migrateout_cdmat'), colNames = asString(PATCHIDS)).asMatrix();
+	migration_matrix = readCSV(safe_path(PARAM_FOLDER, popvars.getValue('migrateout_cdmat')), colNames = asString(PATCHIDS)).asMatrix();
 	mgrounds = PATCHVARS.getValue("Migration Grounds");
 	migration_matrix[,mgrounds == 0] = 0; // Can't migrate to non-migration grounds
 	if (NPATCHES != "all"){migration_matrix = migration_matrix[PATCHIDS,PATCHIDS];}
 	defineGlobal("MIGRATIONOUT", asFloat(migration_matrix));
 	
 	// Straying matrix
-	stray_matrix = readCSV(PARAM_FOLDER + popvars.getValue('stray_cdmat'), colNames = asString(PATCHIDS)).asMatrix();
+	stray_matrix = readCSV(safe_path(PARAM_FOLDER, popvars.getValue('stray_cdmat')), colNames = asString(PATCHIDS)).asMatrix();
 	ngrounds = PATCHVARS.getValue("Natal Grounds");
 	stray_matrix[,ngrounds == 0] = 0; // Can't stray to non-natal grounds
 	if (NPATCHES != "all"){stray_matrix = stray_matrix[PATCHIDS,PATCHIDS];}
 	defineGlobal("STRAYMATRIX", asFloat(stray_matrix));
 	
 	// Migration back matrix
-	migration_matrix = readCSV(PARAM_FOLDER + popvars.getValue('migrateback_cdmat'), colNames = asString(PATCHIDS)).asMatrix();
+	migration_matrix = readCSV(safe_path(PARAM_FOLDER, popvars.getValue('migrateback_cdmat')), colNames = asString(PATCHIDS)).asMatrix();
 	migration_matrix[,ngrounds == 0] = 0; // Can't migrate back to non-natal grounds
 	if (NPATCHES != "all"){migration_matrix = migration_matrix[PATCHIDS,PATCHIDS];}
 	defineGlobal("MIGRATIONBACK", asFloat(migration_matrix));
@@ -1169,7 +1183,7 @@ function (void)setupGlobalsFromPopVars(object<Dictionary>$ popvars){
 	defineGlobal("RETURNMATRIX", return_matrix);
 	
 	// Dispersal matrix
-	dispersal_matrix = readCSV(PARAM_FOLDER + popvars.getValue('disperse_cdmat'), colNames = asString(PATCHIDS));
+	dispersal_matrix = readCSV(safe_path(PARAM_FOLDER, popvars.getValue('disperse_cdmat')), colNames = asString(PATCHIDS));
 	if (NPATCHES != "all"){dispersal_matrix = dispersal_matrix.subsetColumns(PATCHIDS).subsetRows(PATCHIDS);}
 	defineGlobal("DISPERSELOCAL", asFloat(dispersal_matrix.asMatrix()));
 	

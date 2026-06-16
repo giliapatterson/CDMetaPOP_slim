@@ -25,13 +25,13 @@ parser.add_argument('-c','--cores', type = int, default = 1)
 args = parser.parse_args()
 
 if args.datadir and args.inputfilename and args.outputdir:
-    datadir = args.datadir+'/'
-    fileans = datadir+args.inputfilename
+    datadir = args.datadir
+    fileans = os.path.join(datadir, args.inputfilename)
     if(args.filetime):
-        outdir = datadir+args.outputdir + str(foldertime) + '/'
+        outdir = os.path.join(datadir, args.outputdir + str(foldertime))
     else:
-        outdir = datadir+args.outputdir + '/'
-    slim_params = outdir + "slim_parameters" + '/'
+        outdir = os.path.join(datadir, args.outputdir)
+    slim_params = os.path.join(outdir, "slim_parameters")
     
 else:
     print("User must specify data directory and input file name, e.g., at command line type CDmetaPOP_slim.py -d ../CDmetaPOP_data/ -i RunVars.csv")
@@ -44,7 +44,7 @@ if not os.path.exists(fileans):
 
 # Create output file directory - will automatically put in the data directory
 if not os.path.exists(outdir):
-    os.mkdir(outdir)
+    os.makedirs(outdir, exist_ok=True)
 
 # Directory of current file
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -62,12 +62,13 @@ time1 = time.perf_counter()
 
 # First check if the parameters have already been processed
 if not os.path.exists(slim_params):
-    os.mkdir(slim_params)
-command = f"Rscript '{script_dir}/scripts/make_slim_params.R' --parameter_directory {datadir} \
-        --runvars_file_name {fileans} \
-        --output_directory {slim_params}"
+    os.makedirs(slim_params, exist_ok=True)
+command = ["Rscript", os.path.join(script_dir, "scripts", "make_slim_params.R"),
+           "--parameter_directory", datadir,
+           "--runvars_file_name", fileans,
+           "--output_directory", slim_params]
 try:
-    retcode = subprocess.call(command, shell=True)
+    retcode = subprocess.call(command)
     if retcode < 0:
         print("Child was terminated by signal", -retcode, file=sys.stderr)
 except OSError as e:
@@ -104,9 +105,9 @@ nruns = len(old_runvars)
 rep_df = pl.DataFrame({'rep': np.array([np.arange(a) for a in old_runvars[:,'mcruns']]).flatten(),
                        'run': np.repeat(np.arange(len(old_runvars)) + 1, old_runvars[:,'mcruns'], axis=0),
                        'seed': rng.integers(low = 1, high = 30000, size = nreps)})
-rep_df = rep_df.with_columns(param_folder=f"{slim_params}run" + pl.col('run').cast(pl.String))
-rep_df = rep_df.with_columns(runvars = pl.col('param_folder') + "/RunVars_slim.csv")
-rep_df.write_csv(f"{outdir}simulation_info.csv")
+rep_df = rep_df.with_columns(param_folder=slim_params + os.sep + "run" + pl.col('run').cast(pl.String))
+rep_df = rep_df.with_columns(runvars = pl.col('param_folder') + os.sep + "RunVars_slim.csv")
+rep_df.write_csv(os.path.join(outdir, "simulation_info.csv"))
 
 # Run all simulation replicates for a dataframe
 def run_slim(run_df, sim_info_q):
@@ -115,29 +116,31 @@ def run_slim(run_df, sim_info_q):
     failed = 0
     for row in run_df.iter_rows(named = True):
         rep_start = time.perf_counter()
-        rep_output_folder = f"{outdir}run{row['run']-1}batch0mc{row['rep']}species0/"
-        simulation_finished = f"{outdir}run{row['run']-1}batch0mc{row['rep']}species0/finished_{row['seed']}.txt"
+        rep_output_folder = os.path.join(outdir, f"run{row['run']-1}batch0mc{row['rep']}species0")
+        simulation_finished = os.path.join(rep_output_folder, f"finished_{row['seed']}.txt")
         if os.path.exists(simulation_finished) and not args.rerun:
             already_run += 1
             print(f"Run {row['run']} rep {row['rep']} with seed {row['seed']} already finished, skipping. Results: {rep_output_folder}")
         else:
             if not os.path.exists(rep_output_folder):
-                os.mkdir(rep_output_folder)
-            command = f"slim -d SEED={row['seed']} \
-                -d 'RUNVARS_FILE=\"{row['runvars']}\"' \
-                -d 'PARAM_FOLDER=\"./\"'\
-                -d 'IND_OUT_FOLDER=\"{rep_output_folder}\"'\
-                -d 'ALLPOPS_OUT=\"{rep_output_folder + "summary_popAllTime.csv"}\"'\
-                -d 'BYCLASS=\"{rep_output_folder + "summary_classAllTime.csv"}\"' \
-                -d 'QTL_OUT=\"{rep_output_folder + "QTL_overall.csv"}\"'\
-                -d 'QTL_SUBPOPS_OUT=\"{rep_output_folder + "QTL_subpops.csv"}\"'\
-                -d 'FINISHED=\"{simulation_finished}\"' {script_dir}/scripts/cdmetapop_slim.slim"
-            stdout_file = f"{rep_output_folder}log.txt"
+                os.makedirs(rep_output_folder, exist_ok=True)
+            command = ["slim",
+                       "-d", f"SEED={row['seed']}",
+                       "-d", f"RUNVARS_FILE={row['runvars']}",
+                       "-d", "PARAM_FOLDER=./",
+                       "-d", f"IND_OUT_FOLDER={rep_output_folder}",
+                       "-d", f"ALLPOPS_OUT={os.path.join(rep_output_folder, 'summary_popAllTime.csv')}",
+                       "-d", f"BYCLASS={os.path.join(rep_output_folder, 'summary_classAllTime.csv')}",
+                       "-d", f"QTL_OUT={os.path.join(rep_output_folder, 'QTL_overall.csv')}",
+                       "-d", f"QTL_SUBPOPS_OUT={os.path.join(rep_output_folder, 'QTL_subpops.csv')}",
+                       "-d", f"FINISHED={simulation_finished}",
+                       os.path.join(script_dir, "scripts", "cdmetapop_slim.slim")]
+            stdout_file = os.path.join(rep_output_folder, "log.txt")
             with open(stdout_file, 'w') as f:
-                output = subprocess.run(command, shell=True, stdout = f, stderr=subprocess.STDOUT)
+                output = subprocess.run(command, stdout = f, stderr=subprocess.STDOUT)
             if output.returncode != 0:
                 failed += 1
-                print(f"Run {row['run']} rep {row['rep']} failed in {time.perf_counter() - rep_start:.2g} seconds\nLog: {stdout_file}\nCommand: {command}")
+                print(f"Run {row['run']} rep {row['rep']} failed in {time.perf_counter() - rep_start:.2g} seconds\nLog: {stdout_file}\nCommand: {' '.join(command)}")
             else:
                 finished += 1
                 print(f"Run {row['run']} rep {row['rep']} finished in {time.perf_counter() - rep_start:.2g} seconds. Results: {rep_output_folder}")
