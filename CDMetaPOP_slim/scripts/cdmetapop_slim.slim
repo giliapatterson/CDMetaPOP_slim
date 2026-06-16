@@ -744,11 +744,11 @@ RUNTIME late() {
 function (string)safe_path(string base_dir, string file_path){
 	// If file_path is absolute (starts with / or contains :\), use it directly
 	// Otherwise concatenate with base_dir, ensuring proper separator
-	if (substr(file_path, 1, 1) == "/" || (nchar(file_path) >= 2 && substr(file_path, 2, 1) == ":"))
+	if (substr(file_path, 1, 1) == "/" | (nchar(file_path) >= 2 & substr(file_path, 2, 1) == ":"))
 		return file_path;
 	
 	// Ensure base_dir ends with /
-	if (nchar(base_dir) > 0 && substr(base_dir, nchar(base_dir), 1) != "/")
+	if (nchar(base_dir) > 0 & substr(base_dir, nchar(base_dir), 1) != "/")
 		base_dir = base_dir + "/";
 	
 	return base_dir + file_path;
