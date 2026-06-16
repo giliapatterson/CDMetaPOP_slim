@@ -22,17 +22,30 @@ def run_slim(run_df, sim_info_q, outdir, args, script_dir):
         else:
             if not os.path.exists(rep_output_folder):
                 os.makedirs(rep_output_folder, exist_ok=True)
-            command = ["slim",
-                       "-d", f"SEED={row['seed']}",
-                       "-d", f"RUNVARS_FILE='{row['runvars']}'",
-                       "-d", "PARAM_FOLDER='/'",
-                       "-d", f"IND_OUT_FOLDER='{rep_output_folder}'",
-                       "-d", f"ALLPOPS_OUT='{os.path.join(rep_output_folder, 'summary_popAllTime.csv')}'",
-                       "-d", f"BYCLASS='{os.path.join(rep_output_folder, 'summary_classAllTime.csv')}'",
-                       "-d", f"QTL_OUT='{os.path.join(rep_output_folder, 'QTL_overall.csv')}'",
-                       "-d", f"QTL_SUBPOPS_OUT='{os.path.join(rep_output_folder, 'QTL_subpops.csv')}'",
-                       "-d", f"FINISHED='{simulation_finished}'",
-                       os.path.join(script_dir, "scripts", "cdmetapop_slim.slim")]
+            if platform.system() != 'Windows':
+                command = ["slim",
+                        "-d", f"SEED={row['seed']}",
+                        "-d", f"RUNVARS_FILE='{row['runvars']}'",
+                        "-d", "PARAM_FOLDER='/'",
+                        "-d", f"IND_OUT_FOLDER='{rep_output_folder}'",
+                        "-d", f"ALLPOPS_OUT='{os.path.join(rep_output_folder, 'summary_popAllTime.csv')}'",
+                        "-d", f"BYCLASS='{os.path.join(rep_output_folder, 'summary_classAllTime.csv')}'",
+                        "-d", f"QTL_OUT='{os.path.join(rep_output_folder, 'QTL_overall.csv')}'",
+                        "-d", f"QTL_SUBPOPS_OUT='{os.path.join(rep_output_folder, 'QTL_subpops.csv')}'",
+                        "-d", f"FINISHED='{simulation_finished}'",
+                        os.path.join(script_dir, "scripts", "cdmetapop_slim.slim")]
+            else:
+                    command = ["slim",
+                        "-d", f"SEED={row['seed']}",
+                        "-d", f"RUNVARS_FILE={row['runvars']}",
+                        "-d", "PARAM_FOLDER='/'",
+                        "-d", f"IND_OUT_FOLDER={rep_output_folder}",
+                        "-d", f"ALLPOPS_OUT={os.path.join(rep_output_folder, 'summary_popAllTime.csv')}",
+                        "-d", f"BYCLASS={os.path.join(rep_output_folder, 'summary_classAllTime.csv')}",
+                        "-d", f"QTL_OUT={os.path.join(rep_output_folder, 'QTL_overall.csv')}",
+                        "-d", f"QTL_SUBPOPS_OUT={os.path.join(rep_output_folder, 'QTL_subpops.csv')}",
+                        "-d", f"FINISHED={simulation_finished}",
+                        os.path.join(script_dir, "scripts", "cdmetapop_slim.slim")]
             stdout_file = os.path.join(rep_output_folder, "log.txt")
             with open(stdout_file, 'w') as f:
                 output = subprocess.run(command, stdout=f, stderr=subprocess.STDOUT)
