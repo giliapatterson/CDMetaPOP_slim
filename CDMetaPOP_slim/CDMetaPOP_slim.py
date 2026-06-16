@@ -12,6 +12,9 @@ def run_slim(run_df, sim_info_q, outdir, args, script_dir):
     finished = 0
     already_run = 0
     failed = 0
+    # Helper: wrap strings in single quotes for SLiM and normalize separators on Windows
+    def q(v):
+        return f"'{str(v).replace('\\', '/')}'"
     for row in run_df.iter_rows(named=True):
         rep_start = time.perf_counter()
         rep_output_folder = os.path.join(outdir, f"run{row['run']-1}batch0mc{row['rep']}species0")
@@ -37,14 +40,14 @@ def run_slim(run_df, sim_info_q, outdir, args, script_dir):
             else:
                     command = ["slim",
                         "-d", f"SEED={row['seed']}",
-                        "-d", f"RUNVARS_FILE={row['runvars']}",
-                        "-d", "PARAM_FOLDER='/'",
-                        "-d", f"IND_OUT_FOLDER={rep_output_folder}",
-                        "-d", f"ALLPOPS_OUT={os.path.join(rep_output_folder, 'summary_popAllTime.csv')}",
-                        "-d", f"BYCLASS={os.path.join(rep_output_folder, 'summary_classAllTime.csv')}",
-                        "-d", f"QTL_OUT={os.path.join(rep_output_folder, 'QTL_overall.csv')}",
-                        "-d", f"QTL_SUBPOPS_OUT={os.path.join(rep_output_folder, 'QTL_subpops.csv')}",
-                        "-d", f"FINISHED={simulation_finished}",
+                        "-d", f"RUNVARS_FILE={q(row['runvars'])}",
+                        "-d", f"PARAM_FOLDER={q('/')}",
+                        "-d", f"IND_OUT_FOLDER={q(rep_output_folder)}",
+                        "-d", f"ALLPOPS_OUT={q(os.path.join(rep_output_folder, 'summary_popAllTime.csv'))}",
+                        "-d", f"BYCLASS={q(os.path.join(rep_output_folder, 'summary_classAllTime.csv'))}",
+                        "-d", f"QTL_OUT={q(os.path.join(rep_output_folder, 'QTL_overall.csv'))}",
+                        "-d", f"QTL_SUBPOPS_OUT={q(os.path.join(rep_output_folder, 'QTL_subpops.csv'))}",
+                        "-d", f"FINISHED={q(simulation_finished)}",
                         os.path.join(script_dir, "scripts", "cdmetapop_slim.slim")]
             stdout_file = os.path.join(rep_output_folder, "log.txt")
             with open(stdout_file, 'w') as f:
