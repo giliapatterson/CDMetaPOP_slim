@@ -10,4 +10,4 @@ dependencies:
     - scipy
     - R
     - r-tidyverse
-    - r-argparse
+    - r-optparse

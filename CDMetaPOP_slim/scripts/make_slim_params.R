@@ -1,5 +1,5 @@
 library(tidyverse)
-library(argparse)
+library(optparse)
 library(glue)
 
 thisFile <- function() {
@@ -18,30 +18,27 @@ script_directory <- dirname(thisFile())
 
 #source("file_processing_functions.r")
 source(file.path(script_directory, "file_processing_functions.r"))
-parser <- ArgumentParser()
 
-parser$add_argument(
-    "-d",
-    "--parameter_directory",
+option_list <- list(
+  make_option(c("-d",
+    "--parameter_directory"),
+    type = "character",
     default = '../../example_runs/climate_testing_example/',
-    help = "Directory containing CDMetaPOP input files"
-)
-
-parser$add_argument(
-    "-r",
-    "--runvars_file_name",
+    help = "Directory containing CDMetaPOP input files"),
+  make_option(c("-r",
+    "--runvars_file_name"),
+    type = "character",
     default = '../../example_runs/climate_testing_example/RunVars.csv',
-    help = "Name of RunVars file for CDMetaPOP"
-)
-
-parser$add_argument(
-    "-o",
-    "--output_directory",
+    help = "Name of RunVars file for CDMetaPOP"),
+  make_option(c("-o",
+    "--output_directory"),
+    type = "character",
     default = '../../example_runs/climate_testing_example/slim_test_params/',
-    help = "Directory for SLiM input files"
+    help = "Directory for SLiM input files")
 )
 
-args <- parser$parse_args()
+opt_parser <- OptionParser(option_list = option_list)
+args <- parse_args(opt_parser)
 param_directory <- normalizePath(args$parameter_directory, winslash = "/", mustWork = FALSE)
 runvars_file_name <- normalizePath(args$runvars_file_name, winslash = "/", mustWork = FALSE)
 output_overall <- normalizePath(args$output_directory, winslash = "/", mustWork = FALSE)
