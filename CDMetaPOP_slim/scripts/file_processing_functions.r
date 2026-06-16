@@ -34,8 +34,7 @@ new_file_name <- function(new_directory, old_names){
   new_names <- rep("", length(old_names))
   for (i in seq_along(old_names)){
     old_name <- old_names[i]
-    old_name_parts <- str_split_1(old_name, "/")
-    new_names[i] <- paste0(new_directory, "/", old_name_parts[length(old_name_parts)])
+    new_names[i] <- file.path(new_directory, basename(old_name))
   }
   return(new_names)
 }
