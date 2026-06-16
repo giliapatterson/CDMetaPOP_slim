@@ -42,7 +42,7 @@ def run_slim(run_df, sim_info_q, outdir, args, script_dir):
                         "-d", f"SEED={row['seed']}",
                         "-d", f"RUNVARS_FILE={q(row['runvars'])}",
                         "-d", f"PARAM_FOLDER={q('')}",
-                        "-d", f"IND_OUT_FOLDER={q(rep_output_folder)}/",
+                        "-d", f"IND_OUT_FOLDER={q(rep_output_folder+'/')}",
                         "-d", f"ALLPOPS_OUT={q(os.path.join(rep_output_folder, 'summary_popAllTime.csv'))}",
                         "-d", f"BYCLASS={q(os.path.join(rep_output_folder, 'summary_classAllTime.csv'))}",
                         "-d", f"QTL_OUT={q(os.path.join(rep_output_folder, 'QTL_overall.csv'))}",
@@ -189,12 +189,24 @@ def main():
     finished = 0
     failed = 0
     already_run = 0
-    while not sim_info_queue.empty():
-        info = sim_info_queue.get()
-        finished += info['finished']
-        failed += info['failed']
-        already_run += info['already_run']
-    sim_info_queue.close()
+    # Collect one message per worker with a timeout to avoid hanging on Windows
+    for _ in range(len(runs)):
+        try:
+            info = sim_info_queue.get(timeout=10)
+        except Exception:
+            # timeout or queue closed; stop collecting
+            break
+        finished += info.get('finished', 0)
+        failed += info.get('failed', 0)
+        already_run += info.get('already_run', 0)
+    try:
+        sim_info_queue.close()
+    except Exception:
+        pass
+    try:
+        sim_info_queue.join_thread()
+    except Exception:
+        pass
     print(f"{len(rep_df)} reps complete in {time.perf_counter() - start_time:.2g} seconds.\nReps: Failed {failed}/{len(rep_df)} | Already run {already_run}/{len(rep_df)} | Finished {finished}/{len(rep_df)}")
     print("---------------------------------------------------")
 
