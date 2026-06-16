@@ -17,7 +17,7 @@ thisFile <- function() {
 script_directory <- dirname(thisFile())
 
 #source("file_processing_functions.r")
-source(paste0(script_directory,"/file_processing_functions.r"))
+source(file.path(script_directory, "file_processing_functions.r"))
 parser <- ArgumentParser()
 
 parser$add_argument(
@@ -42,12 +42,13 @@ parser$add_argument(
 )
 
 args <- parser$parse_args()
-param_directory = args$parameter_directory # Directory containing CDMetaPOP parameter files
-output_overall = args$output_directory
-dir.create(file.path(output_overall), showWarnings = FALSE)
+param_directory <- normalizePath(args$parameter_directory, winslash = "/", mustWork = FALSE)
+runvars_file_name <- normalizePath(args$runvars_file_name, winslash = "/", mustWork = FALSE)
+output_overall <- normalizePath(args$output_directory, winslash = "/", mustWork = FALSE)
+dir.create(output_overall, showWarnings = FALSE, recursive = TRUE)
 
 ### Process RunVars ###
-runvars_all <- read_csv(args$runvars_file_name, show_col_types = FALSE) 
+runvars_all <- read_csv(runvars_file_name, show_col_types = FALSE) 
 nruns <- nrow(runvars_all)
 
 for(run in 1:nruns){
@@ -56,9 +57,9 @@ for(run in 1:nruns){
   runvars <- runvars_all |> slice(run)
   
   # Directory to output SLiM parameter files
-  output_directory = paste0(output_overall, "run", run, "/")
+  output_directory = file.path(output_overall, paste0("run", run))
   # Create output directory if it doesn't already exist
-  dir.create(file.path(output_directory), showWarnings = FALSE)
+  dir.create(output_directory, showWarnings = FALSE, recursive = TRUE)
   
   #Add 1 to variables containing years to be consistent with SLiM
   runvars <- mutate(runvars,
@@ -84,23 +85,23 @@ for(run in 1:nruns){
   
   #### POPVARS ######
   # Change entry for Popvars to match the Popvars file used for SLiM
-  popvars_file_out <- paste0(output_directory, "PopVars_slim.csv")
+  popvars_file_out <- file.path(output_directory, "PopVars_slim.csv")
   runvars_out <- runvars |>
     mutate(Popvars = popvars_file_out)
   
   # Output runvars
-  write_csv(runvars_out, paste0(output_directory, "RunVars_slim.csv"))
+  write_csv(runvars_out, file.path(output_directory, "RunVars_slim.csv"))
   
   
   ### Process PopVars ###
   # Read in CDMetaPOP popvars
-  popvars <- read_csv(paste0(param_directory, pull(runvars, Popvars)), show_col_types = FALSE) 
+  popvars <- read_csv(file.path(param_directory, pull(runvars, Popvars)), show_col_types = FALSE) 
   
   ## 1. Process patchvars ##
   # Read in CDMetaPOP patchvars
-  patchvars <- read_csv(paste0(param_directory, pull(popvars, xyfilename)), show_col_types = FALSE)
+  patchvars <- read_csv(file.path(param_directory, pull(popvars, xyfilename)), show_col_types = FALSE)
   # Output file for patchvars for slim
-  patchvars_file_out <- paste0(output_directory, "PatchVars_slim.csv")
+  patchvars_file_out <- file.path(output_directory, "PatchVars_slim.csv")
   # Convert patchID to be 0 indexed. This is necessary for SLiM
   patchvars <- mutate(patchvars, PatchID = row_number() - 1)
   
@@ -129,7 +130,7 @@ for(run in 1:nruns){
   ## the same position in the genome in SLiM
   if(genes_method == "file"){
     # Read in all gene files and merge
-    genes_list <- map2(paste0(param_directory, pull(patchvars, `Genes Initialize`)),
+    genes_list <- map2(file.path(param_directory, pull(patchvars, `Genes Initialize`)),
                        patchvars$PatchID,
                        split_genes)
     all_genes <- reduce(genes_list, merge_genes) |>
@@ -138,17 +139,17 @@ for(run in 1:nruns){
     
     ## 1. (a) (ii) Split gene files back into patches and write to file##
     # Folder for storing gene files for SLiM
-    genes_folder = paste0(output_directory, "genes/")
-    dir.create(file.path(genes_folder), showWarnings = FALSE)
+    genes_folder = file.path(output_directory, "genes")
+    dir.create(genes_folder, showWarnings = FALSE, recursive = TRUE)
     # Create a new column in patchvars with the names of the gene files for slim
-    patchvars <- mutate(patchvars, genes_file_slim = paste0(genes_folder, "genes_", PatchID, ".csv"))
+    patchvars <- mutate(patchvars, genes_file_slim = file.path(genes_folder, paste0("genes_", PatchID, ".csv")))
     # Split all genes into patches and write to appropriate files
     map2(patchvars$genes_file_slim, patchvars$PatchID, patch_genes, all_genes = all_genes)
   }
   
   ## 1. (b) Process classvars
   # CDMetaPOP classvars
-  classvars = read_csv(paste0(param_directory, pull(patchvars, `Class Vars`)[1]), show_col_types = FALSE)
+  classvars = read_csv(file.path(param_directory, pull(patchvars, `Class Vars`)[1]), show_col_types = FALSE)
   # Remove unused columns
   if(runvars$sizecontrol == 'Y'){
     classvars_used = c("Age class", "Body Size Mean (mm)", "Body Size Std (mm)", "Distribution",
@@ -172,7 +173,7 @@ for(run in 1:nruns){
   classvars_out <- classvars |> select(all_of(classvars_used))
   
   # Write to file
-  classvars_out_file = paste0(output_directory, "classvars.csv")
+  classvars_out_file = file.path(output_directory, "classvars.csv")
   write_csv(classvars_out, classvars_out_file)
   
   # Update file in patchvars
@@ -257,8 +258,8 @@ for(run in 1:nruns){
   if(climate_change){popvars <- mutate(popvars, year = climchangeyears)}
   
   ## Process matrices
-  cdmat_dir = paste0(output_directory,"cdmats")
-  dir.create(file.path(cdmat_dir), showWarnings = FALSE) # Create output directory if it doesn't already exist
+  cdmat_dir = file.path(output_directory, "cdmats")
+  dir.create(cdmat_dir, showWarnings = FALSE, recursive = TRUE) # Create output directory if it doesn't already exist
   popvars_new <- mutate(popvars, mate_cdmat_old = mate_cdmat,
                         migrateout_cdmat_old = migrateout_cdmat,
                         migrateback_cdmat_old = migrateback_cdmat,
@@ -271,15 +272,15 @@ for(run in 1:nruns){
                                        disperse_cdmat = new_file_name(cdmat_dir, disperse_cdmat_old))
   # Copy matrices over
   for(i in 1:length(climchangeyears)){
-    write_csv(read_csv(paste0(param_directory, popvars_new$mate_cdmat_old[i]), col_names = FALSE, show_col_types = FALSE),
+    write_csv(read_csv(file.path(param_directory, popvars_new$mate_cdmat_old[i]), col_names = FALSE, show_col_types = FALSE),
               popvars_new$mate_cdmat[i],col_names = FALSE, quote = "none")
-    write_csv(read_csv(paste0(param_directory, popvars_new$migrateout_cdmat_old[i]), col_names = FALSE, show_col_types = FALSE),
+    write_csv(read_csv(file.path(param_directory, popvars_new$migrateout_cdmat_old[i]), col_names = FALSE, show_col_types = FALSE),
               popvars_new$migrateout_cdmat[i],col_names = FALSE, quote = "none")
-    write_csv(read_csv(paste0(param_directory, popvars_new$migrateback_cdmat_old[i]), col_names = FALSE, show_col_types = FALSE),
+    write_csv(read_csv(file.path(param_directory, popvars_new$migrateback_cdmat_old[i]), col_names = FALSE, show_col_types = FALSE),
               popvars_new$migrateback_cdmat[i],col_names = FALSE, quote = "none")
-    write_csv(read_csv(paste0(param_directory, popvars_new$stray_cdmat_old[i]), col_names = FALSE, show_col_types = FALSE),
+    write_csv(read_csv(file.path(param_directory, popvars_new$stray_cdmat_old[i]), col_names = FALSE, show_col_types = FALSE),
               popvars_new$stray_cdmat[i],col_names = FALSE, quote = "none")
-    write_csv(read_csv(paste0(param_directory, popvars_new$disperse_cdmat_old[i]), col_names = FALSE, show_col_types = FALSE),
+    write_csv(read_csv(file.path(param_directory, popvars_new$disperse_cdmat_old[i]), col_names = FALSE, show_col_types = FALSE),
               popvars_new$disperse_cdmat[i],col_names = FALSE, quote = "none")
   }
   
@@ -331,8 +332,8 @@ for(run in 1:nruns){
   }
   # Genome file
   if(has_name(popvars, "genome")){
-    genome <- read_csv(paste0(param_directory, popvars$genome[1]), show_col_types = FALSE)
-    genome_outfile <- paste0(output_directory, "genome.csv")
+    genome <- read_csv(file.path(param_directory, popvars$genome[1]), show_col_types = FALSE)
+    genome_outfile <- file.path(output_directory, "genome.csv")
     write_csv(genome, genome_outfile)
     popvars_new$genome <- genome_outfile
     popvars_used <- c(popvars_used, "genome", "qtl_prop_genome", "qtl_pheno_eff", "qtl_env_variable",
