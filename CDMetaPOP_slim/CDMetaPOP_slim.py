@@ -5,6 +5,7 @@ import subprocess
 import polars as pl
 from multiprocessing import Pool, Process, Queue, Lock
 import multiprocessing as mp
+import platform
 
 
 start_time = datetime.datetime.now()
@@ -161,7 +162,8 @@ start_time = time.perf_counter()
 runs = []
 breakpoints = np.linspace(0, rep_df.shape[0], cores + 1).astype(int)
 if __name__ == '__main__':
-    mp.set_start_method('fork')
+    start_method = 'fork' if platform.system() != 'Windows' else 'spawn'
+    mp.set_start_method(start_method)
     sim_info_queue = Queue()
     for start, end in zip(breakpoints[:-1], breakpoints[1:]):
         subset_df = rep_df[start:end]
