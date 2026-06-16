@@ -41,7 +41,7 @@ def run_slim(run_df, sim_info_q, outdir, args, script_dir):
                     command = ["slim",
                         "-d", f"SEED={row['seed']}",
                         "-d", f"RUNVARS_FILE={q(row['runvars'])}",
-                        "-d", f"PARAM_FOLDER={q('/')}",
+                        "-d", f"PARAM_FOLDER={q('')}",
                         "-d", f"IND_OUT_FOLDER={q(rep_output_folder)}",
                         "-d", f"ALLPOPS_OUT={q(os.path.join(rep_output_folder, 'summary_popAllTime.csv'))}",
                         "-d", f"BYCLASS={q(os.path.join(rep_output_folder, 'summary_classAllTime.csv'))}",

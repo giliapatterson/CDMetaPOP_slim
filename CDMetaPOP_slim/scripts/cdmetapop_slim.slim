@@ -742,6 +742,13 @@ RUNTIME late() {
 // Helper functions
 // Safely join paths, handling both absolute and relative paths for cross-platform compatibility
 function (string)safe_path(string base_dir, string file_path){
+	// Normalize Windows drive paths that may be prefixed with extra slashes
+	if (nchar(file_path) >= 3 & substr(file_path, 1, 2) == "//" & substr(file_path, 3, 1) != "/"){
+		file_path = substr(file_path, 2);
+	}
+	if (nchar(file_path) >= 3 & substr(file_path, 1, 1) == "/" & substr(file_path, 3, 1) == ":"){
+		file_path = substr(file_path, 2);
+	}
 	// If file_path is absolute (starts with / or contains :\), use it directly
 	// Otherwise concatenate with base_dir, ensuring proper separator
 	if (substr(file_path, 1, 1) == "/" | (nchar(file_path) >= 2 & substr(file_path, 2, 1) == ":"))
