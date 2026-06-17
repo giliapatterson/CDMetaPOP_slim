@@ -763,14 +763,6 @@ late(){
 	for (dest in unique(destinations)){dest.takeMigrants(dispersers[destinations == dest]);}
 }
 
-late(){
-	if(QTL){
-		print("Writing QTL output");
-		writeQTLOutputOverall(QTL_OUT, header = F, qtl_tpc = QTL_TPC);
-		writeQTLOutputSubpops(QTL_SUBPOPS_OUT, header = F, qtl_tpc = QTL_TPC);
-	}
-}
-
 late() {
 	// QTL selection
 	if(QTL & !QTL_TPC){
@@ -859,6 +851,14 @@ late(){
 	writeSubpopOutput(ALLPOPS_OUT, header = F);
 	print("Writing output by class");
 	writeClassOutput(BYCLASS, header = F);
+}
+
+late(){
+	if(QTL){
+		print("Writing QTL output");
+		writeQTLOutputOverall(QTL_OUT, header = F, qtl_tpc = QTL_TPC);
+		writeQTLOutputSubpops(QTL_SUBPOPS_OUT, header = F, qtl_tpc = QTL_TPC);
+	}
 }
 
 MUTATION_ORIGIN_TICK late(){
