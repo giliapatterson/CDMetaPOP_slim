@@ -208,7 +208,7 @@ initialize() {
 		initializeMutationType("m3", 0.5, "f", 0.0);
 		//Epsilon
 		initializeMutationType("m4", 0.5, "s", EPSILON_PHENO_EFF);
-		defineConstant('QTL_REGIONS', 10);
+		defineConstant('QTL_REGIONS', 100);
 		defineConstant('QTL_REGION_LENGTH', 10^3);
 		defineConstant('QTL_PROP_REGION', 1.0);
 		// Genomic element for QTL regions that control Topt and epsilon
@@ -227,10 +227,12 @@ initialize() {
 			length = asInteger(row.getValue('Length'));
 			rr = row.getValue('recombination_rate');
 			mr = row.getValue('mutation_rate');
-			nqtls = qtl_counts[i];
-			print(nqtls + " QTLs");
+			potential_nqtls = qtl_counts[i];
+			print(potential_nqtls + " QTLs");
 			// Pick start positions for QTL regions
-			qtl_starts = sort(sample(0:asInteger(length/QTL_REGION_LENGTH - 1)*QTL_REGION_LENGTH, nqtls));
+			potential_starts = 0:asInteger(length/QTL_REGION_LENGTH - 1)*QTL_REGION_LENGTH;
+			nqtls = min(potential_nqtls, length(potential_starts));
+			qtl_starts = sort(sample(potential_starts, nqtls));
 			// Add QTL genomic elements to QTL regions and neutral genomic elements to in between regions
 			// Keep track of mutation rate regions
 			region_ends = c();
@@ -251,9 +253,11 @@ initialize() {
 					initializeGenomicElement(g2, start = asInteger(start_pos), end = asInteger(start_pos + QTL_REGION_LENGTH - 1));
 					region_ends = c(region_ends, asInteger(start_pos + QTL_REGION_LENGTH - 1));
 					mutation_rates = c(mutation_rates, mr*QTL_PROP_REGION);
-					initializeGenomicElement(g3, start = asInteger(neutral_start), end = asInteger(neutral_end));
-					region_ends = c(region_ends, asInteger(neutral_end));
-					mutation_rates = c(mutation_rates, 0.0);
+					if(neutral_end > neutral_start){
+						initializeGenomicElement(g3, start = asInteger(neutral_start), end = asInteger(neutral_end));
+						region_ends = c(region_ends, asInteger(neutral_end));
+						mutation_rates = c(mutation_rates, 0.0);
+					}
 				}
 			}
 			initializeMutationRate(mutation_rates, ends = region_ends);
