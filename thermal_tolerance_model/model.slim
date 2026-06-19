@@ -209,8 +209,8 @@ initialize() {
 		//Epsilon
 		initializeMutationType("m4", 0.5, "s", EPSILON_PHENO_EFF);
 		defineConstant('QTL_REGIONS', 10);
-		defineConstant('QTL_REGION_LENGTH', 10^5);
-		defineConstant('QTL_PROP_REGION', 0.01);
+		defineConstant('QTL_REGION_LENGTH', 10^3);
+		defineConstant('QTL_PROP_REGION', 1.0);
 		// Genomic element for QTL regions that control Topt and epsilon
 		initializeGenomicElementType("g2", c(m2, m3, m4), c(QTL_PROP_REGION/2, 1.0-QTL_PROP_REGION, QTL_PROP_REGION/2));
 		// Genomic element for neutral regions
@@ -224,7 +224,7 @@ initialize() {
 		for(i in 0:(genome.nrow-1)){
 			row = genome.subsetRows(i);
 			id = row.getValue('Chromosome');
-			length = asInteger(row.getValue('Length')*100);
+			length = asInteger(row.getValue('Length'));
 			rr = row.getValue('recombination_rate');
 			mr = row.getValue('mutation_rate');
 			nqtls = qtl_counts[i];
@@ -232,20 +232,31 @@ initialize() {
 			// Pick start positions for QTL regions
 			qtl_starts = sort(sample(0:asInteger(length/QTL_REGION_LENGTH - 1)*QTL_REGION_LENGTH, nqtls));
 			// Add QTL genomic elements to QTL regions and neutral genomic elements to in between regions
+			// Keep track of mutation rate regions
+			region_ends = c();
+			mutation_rates = c();
 			initializeChromosome(id, length, type = "A", symbol = "c" + id);
 			neutral_start = 0;
 			if(nqtls > 0) neutral_end = qtl_starts[0] - 1; else neutral_end = length - 1;
-			if(neutral_end > 0) initializeGenomicElement(g3, start = asInteger(neutral_start), end = asInteger(neutral_end));
+			if(neutral_end > 0){
+				initializeGenomicElement(g3, start = asInteger(neutral_start), end = asInteger(neutral_end));
+				region_ends = c(region_ends, asInteger(neutral_end));
+				mutation_rates = c(mutation_rates, 0.0);
+			}
 			if(nqtls > 0){
 				for(k in 0:(length(qtl_starts)-1)){
 					start_pos = qtl_starts[k];
 					neutral_start = start_pos + QTL_REGION_LENGTH;
 					if (k < length(qtl_starts) - 1) neutral_end = qtl_starts[k + 1] - 1; else neutral_end = length - 1;
 					initializeGenomicElement(g2, start = asInteger(start_pos), end = asInteger(start_pos + QTL_REGION_LENGTH - 1));
+					region_ends = c(region_ends, asInteger(start_pos + QTL_REGION_LENGTH - 1));
+					mutation_rates = c(mutation_rates, mr*QTL_PROP_REGION);
 					initializeGenomicElement(g3, start = asInteger(neutral_start), end = asInteger(neutral_end));
+					region_ends = c(region_ends, asInteger(neutral_end));
+					mutation_rates = c(mutation_rates, 0.0);
 				}
 			}
-			initializeMutationRate(mr);
+			initializeMutationRate(mutation_rates, ends = region_ends);
 			initializeRecombinationRate(rr*1e-8);
 		}
 		m2.convertToSubstitution = T;
