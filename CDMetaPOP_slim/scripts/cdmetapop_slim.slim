@@ -803,42 +803,6 @@ late(){
 }
 
 late() {
-	// QTL selection
-	if(QTL & !QTL_TPC){
-		print("QTL selection back");
-		inds = sim.subpopulations.individuals;
-		phenotypes = inds.getValue('phenotype');
-		patches = inds.subpopulation.id;
-		// Get current values of environmental variables
-		optimums = executeLambda(QTL_ENV_VARIABLE + ";");
-		deviations = optimums[patches] - phenotypes;
-		fitnessFunctionMax = dnorm(0.0, 0.0, QTL_FIT_SD);
-		psurvive = dnorm(deviations, 0.0, QTL_FIT_SD)/fitnessFunctionMax;
-		//print(psurvive);
-		kill = inds[runif(length(inds)) > psurvive];
-		print(length(kill) + " individuals killed");
-		sim.killIndividuals(kill);
-	}
-	if(QTL & QTL_TPC){
-		print("Thermal performance curve selection back");
-		inds = sim.subpopulations.individuals;
-		Topts = inds.getValue('Topt');
-		epsilons = inds.getValue('epsilon');
-		patches = inds.subpopulation.id;
-		temperatures = GrowthTemperatureBack[patches];
-		psurvive = thermal_performance(temperatures, Topts, epsilons, asFloat(TOPT_COST), asFloat(EPSILON_COST), asFloat(TOPT_BASELINE), asFloat(EPSILON_BASELINE));
-		kill = inds[runif(length(inds)) > psurvive];
-		print(length(kill) + " individuals killed");
-		sim.killIndividuals(kill);
-	}
-	if(sum(sim.subpopulations.individualCount) == 0){
-		if(TREESEQ == 'true') sim.treeSeqOutput(TREESEQ_FILE, overwriteDirectory=T);
-		writeFile(FINISHED, "Simulation extinct");
-		stop("Extinct in " + (clock() - start) + " seconds.");
-	}
-}
-
-late() {
 	
 	// Density dependent mortality
 	if(POPVARS.getValue("popmodel") == "packing"){
@@ -870,6 +834,42 @@ late(){
 	print(length(kill) + " individuals died.");
 	
 	defineGlobal("N2", sim.subpopulations.individualCount);
+	if(sum(sim.subpopulations.individualCount) == 0){
+		if(TREESEQ == 'true') sim.treeSeqOutput(TREESEQ_FILE, overwriteDirectory=T);
+		writeFile(FINISHED, "Simulation extinct");
+		stop("Extinct in " + (clock() - start) + " seconds.");
+	}
+}
+
+late() {
+	// QTL selection
+	if(QTL & !QTL_TPC){
+		print("QTL selection back");
+		inds = sim.subpopulations.individuals;
+		phenotypes = inds.getValue('phenotype');
+		patches = inds.subpopulation.id;
+		// Get current values of environmental variables
+		optimums = executeLambda(QTL_ENV_VARIABLE + ";");
+		deviations = optimums[patches] - phenotypes;
+		fitnessFunctionMax = dnorm(0.0, 0.0, QTL_FIT_SD);
+		psurvive = dnorm(deviations, 0.0, QTL_FIT_SD)/fitnessFunctionMax;
+		//print(psurvive);
+		kill = inds[runif(length(inds)) > psurvive];
+		print(length(kill) + " individuals killed");
+		sim.killIndividuals(kill);
+	}
+	if(QTL & QTL_TPC){
+		print("Thermal performance curve selection back");
+		inds = sim.subpopulations.individuals;
+		Topts = inds.getValue('Topt');
+		epsilons = inds.getValue('epsilon');
+		patches = inds.subpopulation.id;
+		temperatures = GrowthTemperatureBack[patches];
+		psurvive = thermal_performance(temperatures, Topts, epsilons, asFloat(TOPT_COST), asFloat(EPSILON_COST), asFloat(TOPT_BASELINE), asFloat(EPSILON_BASELINE));
+		kill = inds[runif(length(inds)) > psurvive];
+		print(length(kill) + " individuals killed");
+		sim.killIndividuals(kill);
+	}
 	if(sum(sim.subpopulations.individualCount) == 0){
 		if(TREESEQ == 'true') sim.treeSeqOutput(TREESEQ_FILE, overwriteDirectory=T);
 		writeFile(FINISHED, "Simulation extinct");
