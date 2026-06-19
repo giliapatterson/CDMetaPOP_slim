@@ -208,9 +208,6 @@ initialize() {
 		initializeMutationType("m3", 0.5, "f", 0.0);
 		//Epsilon
 		initializeMutationType("m4", 0.5, "s", EPSILON_PHENO_EFF);
-		defineConstant('QTL_REGIONS', 100);
-		defineConstant('QTL_REGION_LENGTH', 10^3);
-		defineConstant('QTL_PROP_REGION', 1.0);
 		// Genomic element for QTL regions that control Topt and epsilon
 		initializeGenomicElementType("g2", c(m2, m3, m4), c(QTL_PROP_REGION/2, 1.0-QTL_PROP_REGION, QTL_PROP_REGION/2));
 		// Genomic element for neutral regions
@@ -1359,6 +1356,9 @@ function (void)setupConstantsFromPopVars(object<Dictionary>$ popvars)
 	}
 	if(QTL_TPC){
 		defineConstant("QTL_PROP_GENOME", popvars.getValue('qtl_prop_genome'));
+		defineConstant('QTL_REGIONS', popvars.getValue('qtl_regions'));
+		defineConstant('QTL_REGION_LENGTH', popvars.getValue('qtl_region_length'));
+		defineConstant('QTL_PROP_REGION', popvars.getValue('qtl_prop_region'));
 		defineConstant("TOPT_BASELINE", popvars.getValue('Topt_baseline'));
 		defineConstant("EPSILON_BASELINE", popvars.getValue('epsilon_baseline'));
 		defineConstant("TOPT_VE", popvars.getValue('Topt_VE'));
