@@ -103,16 +103,16 @@ initialize() {
 		//"SEED", getSeed(), // random seed
 		"SEED", 5290, // random seed
 		//"RUNVARS_FILE", 'parameters/slim_output/slim_parameters/run1/RunVars_slim.csv', // File containing run info
-		"RUNVARS_FILE", 'parameters_vulnerability/slim_output/slim_parameters/run2/RunVars_slim.csv',
+		"RUNVARS_FILE", 'parameters_vulnerability_new_ga/slim_output/slim_parameters/run2/RunVars_slim.csv',
 		"PARAM_FOLDER", './', // Folder containing parameter files
-		"IND_OUT_FOLDER", "./results_gui/", // Folder for individual output
-		"ALLPOPS_OUT", "./results_gui/summary_popAllTime.csv",
-		"BYCLASS", "./results_gui/summary_classAllTime.csv",
-		"QTL_OUT", "./results_gui/QTL_overall.csv",
-		"QTL_SUBPOPS_OUT", "./results_gui/QTL_subpops.csv",
-		"MUTATION_OUTPUT_FILE", "./results_gui/mutation_origins.csv",
-		"MUTATION_EFFECTS_OUTPUT_FILE", "./results_gui/mutation_effects.csv",
-		"FINISHED", "./results_gui/finished.txt",
+		"IND_OUT_FOLDER", "results_gui/", // Folder for individual output
+		"ALLPOPS_OUT", "results_gui/summary_popAllTime.csv",
+		"BYCLASS", "results_gui/summary_classAllTime.csv",
+		"QTL_OUT", "results_gui/QTL_overall.csv",
+		"QTL_SUBPOPS_OUT", "results_gui/QTL_subpops.csv",
+		"MUTATION_OUTPUT_FILE", "results_gui/mutation_origins.csv",
+		"MUTATION_EFFECTS_OUTPUT_FILE", "results_gui/mutation_effects.csv",
+		"FINISHED", "results_gui/finished.txt",
 		"SCALEPOPSIZE",1.0, // Decrease (or increase) carrying capacities for testing
 		"NPATCHES", 'all', // Decrease number of patches for testing
 		"TREESEQ", 'false',
@@ -1781,19 +1781,19 @@ function (void) writeMutationalOrigins(string outfile, logical header, integer f
 	return;
 }
 function (void) writeMutationEffects(string outfile, logical header){
-	header_string = "tick,substitution,phenotype,effect";
+	header_string = "tick,substitution,phenotype,effect,frequency,count,id";
 	if(header){
 		writeFile(outfile, header_string);
 		return;
 	}
-	topt_subs = unique(sim.substitutionsOfType(m2)).selectionCoeff;
-	topt_muts = unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2)).selectionCoeff;
-	epsilon_subs = unique(sim.substitutionsOfType(m4)).selectionCoeff;
-	epsilon_muts = unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(m4)).selectionCoeff;
-	if(length(topt_subs) > 0) writeFile(outfile, paste(sapply(topt_subs, "paste0(community.tick, ',', 'T', ',', 'Topt', ',', applyValue);"), sep = '\n'), append = T);
-	if(length(epsilon_subs) > 0) writeFile(outfile, paste(sapply(epsilon_subs, "paste0(community.tick, ',', 'T', ',', 'epsilon', ',', applyValue);"), sep = '\n'), append = T);
-	if(length(topt_muts) > 0) writeFile(outfile, paste(sapply(topt_muts, "paste0(community.tick, ',', 'F', ',', 'Topt', ',', applyValue);"), sep = '\n'), append = T);
-	if(length(epsilon_muts) > 0) writeFile(outfile, paste(sapply(epsilon_muts, "paste0(community.tick, ',', 'F', ',', 'epsilon', ',', applyValue);"), sep = '\n'), append = T);
+	topt_subs = unique(sim.substitutionsOfType(m2));
+	topt_muts = unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2));
+	epsilon_subs = unique(sim.substitutionsOfType(m4));
+	epsilon_muts = unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(m4));
+	if(length(topt_subs) > 0) writeFile(outfile, paste(sapply(topt_subs, "paste0(community.tick, ',', 'T', ',', 'Topt', ',', applyValue.selectionCoeff, ',', sim.mutationFrequencies(NULL, applyValue),',', sim.mutationCounts(NULL, applyValue) ,',', applyValue.id);"), sep = '\n'), append = T);
+	if(length(epsilon_subs) > 0) writeFile(outfile, paste(sapply(epsilon_subs, "paste0(community.tick, ',', 'T', ',', 'epsilon', ',', applyValue.selectionCoeff, ',', sim.mutationFrequencies(NULL, applyValue),',', sim.mutationCounts(NULL, applyValue) ,',', applyValue.id);"), sep = '\n'), append = T);
+	if(length(topt_muts) > 0) writeFile(outfile, paste(sapply(topt_muts, "paste0(community.tick, ',', 'F', ',', 'Topt', ',', applyValue.selectionCoeff, ',', sim.mutationFrequencies(NULL, applyValue),',', sim.mutationCounts(NULL, applyValue) ,',', applyValue.id);"), sep = '\n'), append = T);
+	if(length(epsilon_muts) > 0) writeFile(outfile, paste(sapply(epsilon_muts, "paste0(community.tick, ',', 'F', ',', 'epsilon', ',', applyValue.selectionCoeff, ',', sim.mutationFrequencies(NULL, applyValue), ',', sim.mutationCounts(NULL, applyValue) ,',', applyValue.id);"), sep = '\n'), append = T);
 	return;
 }
 
