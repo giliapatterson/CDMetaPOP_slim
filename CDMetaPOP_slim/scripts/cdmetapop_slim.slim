@@ -103,7 +103,7 @@ initialize() {
 		//"SEED", getSeed(), // random seed
 		"SEED", 5290, // random seed
 		//"RUNVARS_FILE", 'parameters/slim_output/slim_parameters/run1/RunVars_slim.csv', // File containing run info
-		"RUNVARS_FILE", 'parameters_vulnerability_new_ga/slim_output/slim_parameters/run2/RunVars_slim.csv',
+		"RUNVARS_FILE", 'parameters_no_change1/slim_output/slim_parameters/run14/RunVars_slim.csv',
 		"PARAM_FOLDER", './', // Folder containing parameter files
 		"IND_OUT_FOLDER", "results_gui/", // Folder for individual output
 		"ALLPOPS_OUT", "results_gui/summary_popAllTime.csv",
@@ -368,15 +368,31 @@ first(){
 				}
 			}
 		}
-		if(!isNULL(POPVARS.getValue('qtl_mutations_initial')) & GENOME_FILE){
+		if(!isNULL(POPVARS.getValue('qtl_mutations_initial')) & GENOME_FILE & !QTL_TPC){
 			nmutations = asInteger(POPVARS.getValue('qtl_mutations_initial'));
 			if(nmutations > 0){
 				mut_chroms = sample(sim.chromosomes, nmutations, replace = T, weights = sim.chromosomes.length/sum(sim.chromosomes.length));
 				for(chrom in mut_chroms){
 					locus = sample(0:chrom.lastPosition, 1);
 					mut_hap = sample(sim.subpopulations.haplosomesForChromosomes(chrom), 1);
-					if(!QTL_TPC) mut_hap.addNewDrawnMutation(m2, locus);
-					if(QTL_TPC) mut_hap.addNewDrawnMutation(sample(c(m2, m4), 1), locus);
+					mut_hap.addNewDrawnMutation(m2, locus);
+				}
+			}
+		}
+		if(!isNULL(POPVARS.getValue('qtl_mutations_initial')) & GENOME_FILE & QTL_TPC){
+			nmutations = asInteger(POPVARS.getValue('qtl_mutations_initial'));
+			print("nmutations " + nmutations + " per QTL region");
+			if(nmutations > 0){
+				for(chrom in sim.chromosomes){
+					QTL_ends = chrom.mutationEndPositions[chrom.mutationRates > 0];
+					QTL_starts = QTL_ends - QTL_REGION_LENGTH + 1;
+					if(length(QTL_ends) > 0){
+						for(qtl_i in 0:(length(QTL_starts) - 1)){
+							loci = asInteger(sample(QTL_starts[qtl_i]:QTL_ends[qtl_i], nmutations));
+							mut_hap = sample(sim.subpopulations.haplosomesForChromosomes(chrom), nmutations);
+							for(mut_i in 0:(length(mut_hap) - 1)) mut_hap[mut_i].addNewDrawnMutation(sample(c(m2, m4), 1), loci[mut_i]);
+						}
+					}
 				}
 			}
 		}
@@ -1790,8 +1806,8 @@ function (void) writeMutationEffects(string outfile, logical header){
 	topt_muts = unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2));
 	epsilon_subs = unique(sim.substitutionsOfType(m4));
 	epsilon_muts = unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(m4));
-	if(length(topt_subs) > 0) writeFile(outfile, paste(sapply(topt_subs, "paste0(community.tick, ',', 'T', ',', 'Topt', ',', applyValue.selectionCoeff, ',', sim.mutationFrequencies(NULL, applyValue),',', sim.mutationCounts(NULL, applyValue) ,',', applyValue.id);"), sep = '\n'), append = T);
-	if(length(epsilon_subs) > 0) writeFile(outfile, paste(sapply(epsilon_subs, "paste0(community.tick, ',', 'T', ',', 'epsilon', ',', applyValue.selectionCoeff, ',', sim.mutationFrequencies(NULL, applyValue),',', sim.mutationCounts(NULL, applyValue) ,',', applyValue.id);"), sep = '\n'), append = T);
+	if(length(topt_subs) > 0) writeFile(outfile, paste(sapply(topt_subs, "paste0(community.tick, ',', 'T', ',', 'Topt', ',', applyValue.selectionCoeff, ',', 1.0,',', sum(sim.subpopulations.individualCount) ,',', applyValue.id);"), sep = '\n'), append = T);
+	if(length(epsilon_subs) > 0) writeFile(outfile, paste(sapply(epsilon_subs, "paste0(community.tick, ',', 'T', ',', 'epsilon', ',', applyValue.selectionCoeff, ',', 1.0,',', sum(sim.subpopulations.individualCount) ,',', applyValue.id);"), sep = '\n'), append = T);
 	if(length(topt_muts) > 0) writeFile(outfile, paste(sapply(topt_muts, "paste0(community.tick, ',', 'F', ',', 'Topt', ',', applyValue.selectionCoeff, ',', sim.mutationFrequencies(NULL, applyValue),',', sim.mutationCounts(NULL, applyValue) ,',', applyValue.id);"), sep = '\n'), append = T);
 	if(length(epsilon_muts) > 0) writeFile(outfile, paste(sapply(epsilon_muts, "paste0(community.tick, ',', 'F', ',', 'epsilon', ',', applyValue.selectionCoeff, ',', sim.mutationFrequencies(NULL, applyValue), ',', sim.mutationCounts(NULL, applyValue) ,',', applyValue.id);"), sep = '\n'), append = T);
 	return;
