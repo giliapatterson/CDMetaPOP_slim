@@ -103,7 +103,10 @@ else:
 # Call each mcrun a rep
 nreps = sum(old_runvars[:,'mcruns'])
 nruns = len(old_runvars)
-rep_df = pl.DataFrame({'rep': np.array([np.arange(a) for a in old_runvars[:,'mcruns']]).flatten(),
+rep_list = []
+for a in old_runvars[:,'mcruns']:
+    rep_list.extend(np.arange(a))
+rep_df = pl.DataFrame({'rep': rep_list,
                        'run': np.repeat(np.arange(len(old_runvars)) + 1, old_runvars[:,'mcruns'], axis=0),
                        'seed': rng.integers(low = 1, high = 30000, size = nreps)})
 rep_df = rep_df.with_columns(param_folder=f"{slim_params}run" + pl.col('run').cast(pl.String))
