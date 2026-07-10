@@ -103,7 +103,7 @@ initialize() {
 		//"SEED", getSeed(), // random seed
 		"SEED", 5290, // random seed
 		//"RUNVARS_FILE", 'parameters/slim_output/slim_parameters/run1/RunVars_slim.csv', // File containing run info
-		"RUNVARS_FILE", 'parameters_no_change1/slim_output/slim_parameters/run14/RunVars_slim.csv',
+		"RUNVARS_FILE", 'run24/RunVars_slim.csv',
 		"PARAM_FOLDER", './', // Folder containing parameter files
 		"IND_OUT_FOLDER", "results_gui/", // Folder for individual output
 		"ALLPOPS_OUT", "results_gui/summary_popAllTime.csv",
@@ -685,6 +685,8 @@ early(){
 
 mutationEffect(m1) { return 1.0; }
 mutationEffect(m2) { return 1.0; }
+mutationEffect(m3) { return 1.0; }
+mutationEffect(m4) { return 1.0; }
 
 
 late(){
@@ -719,6 +721,7 @@ late(){
 	}
 	defineGlobal("DEATHS1", nkilled.getValue("nkilled_subpops"));
 	defineGlobal("DEATHS1_AGE", nkilled.getValue("nkilled_ages"));
+	print(sum(DEATHS1) + " individuals killed.");
 	if(sum(sim.subpopulations.individualCount) == 0){
 		if(TREESEQ == 'true') sim.treeSeqOutput(TREESEQ_FILE, overwriteDirectory=T);
 		writeFile(FINISHED, "Simulation extinct");
@@ -831,6 +834,7 @@ late() {
 	}
 	defineGlobal("DEATHS2", nkilled.getValue("nkilled_subpops"));
 	defineGlobal("DEATHS2_AGE", nkilled.getValue("nkilled_ages"));	
+	print(sum(DEATHS2) + " individuals killed.");
 	if(sum(sim.subpopulations.individualCount) == 0){
 		if(TREESEQ == 'true') sim.treeSeqOutput(TREESEQ_FILE, overwriteDirectory=T);
 		writeFile(FINISHED, "Simulation extinct");
@@ -1694,7 +1698,7 @@ function (string) mutationalOrigins(string header_string, integer focal_subpop_i
 				current_counts = sim.mutationCounts(focal_subpop, focal_mutations);
 				if(length(focal_subs) > 0){
 					freqs800_subs = matrix(sim.substitutions.getValue('freqs800'), nrow = length(sim.subpopulations));
-					current_counts_subs = rep(focal_subpop.individualCount*2, length(sim.substitutions));
+					current_counts_subs = rep(focal_subpop.individualCount*2, length(focal_subs));
 					Topt_count_origin_tick = sapply(sim.subpopulations.id, "sum(current_counts*freqs800[applyValue,]) + sum(current_counts_subs*freqs800_subs[applyValue,]);");
 				}
 				else{
