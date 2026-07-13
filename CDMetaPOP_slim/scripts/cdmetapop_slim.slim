@@ -1699,17 +1699,7 @@ function (string) mutationalOrigins(string header_string, integer focal_subpop_i
 				if(length(focal_subs) > 0){
 					freqs800_subs = matrix(focal_subs.getValue('freqs800'), nrow = length(sim.subpopulations));
 					current_counts_subs = rep(focal_subpop.individualCount*2, length(focal_subs));
-					print("Mutations: " + length(focal_mutations) + " subs: " + length(focal_subs));
-					Topt_count_origin_tick = rep(0.0, length(sim.subpopulations));
-					for (subpop_id in sim.subpopulations.id) {
-						sub_freqs = c(freqs800_subs[subpop_id,]);
-						sub_mut_freqs = c(freqs800[subpop_id,]);
-						print("sub_freqs length: " + length(sub_freqs));
-						print("sub_counts length: " + length(current_counts_subs));
-						Topt_count_origin_tick[subpop_id] =
-							sum(current_counts * sub_mut_freqs) +
-							sum(current_counts_subs * sub_freqs);
-					}
+					Topt_count_origin_tick = sapply(sim.subpopulations.id, "sum(current_counts*freqs800[applyValue,]) + sum(current_counts_subs*freqs800_subs[applyValue,]);");
 				}
 				else{
 					Topt_count_origin_tick = sapply(sim.subpopulations.id, "sum(current_counts*freqs800[applyValue,]);");
