@@ -51,3 +51,31 @@ ggplot(tpc_and_environment, aes(x = t, y = performance, color = method)) +
   theme_dark(base_size = 14) +
   scale_color_viridis_d(name = "Model", option = 'magma')
 ggsave("tpc_with_environment.png", width = 10, height = 3)
+
+area <- function(a, b, Topt, epsilon){
+  exp((a - Topt)/epsilon)*(a - 2*epsilon - Topt) + exp((b - Topt)/epsilon)*(-b + 2*epsilon + Topt)
+}
+
+epsilon_cost_df <- expand_grid(epsilon_baseline = 3,
+                               Topt_baseline = 13,
+                               epsilon = c(2.0, 3.0, 4.0, 5.0, 6.0),
+                               Topt = c(Topt_baseline),
+                               t = seq(-20, 28, length.out = 100),
+                               Topt_cost = 0,
+                               epsilon_cost = 0,
+                               tmin = -50) |>
+  mutate(x = (t-Topt)/epsilon,
+         CTMax = Topt + epsilon,
+         area = area(tmin, CTMax, Topt, epsilon),
+         penalty = pmin(area(tmin, Topt_baseline+epsilon_baseline, Topt_baseline, epsilon_baseline)/area(tmin, CTMax, Topt, epsilon), 1.0),
+         P1 = exp(x)*(1-x)*penalty,
+         P = if_else(P1>0, P1, 0))
+ggplot(epsilon_cost_df, aes(x = t, y = P, color = factor(round(epsilon, 2)))) +
+  geom_line(linewidth = 0.5) +
+  xlab("Temperature") +
+  ylab("Survival Probability") +
+  theme_bw(base_size = 10) +
+  scale_color_discrete(name = expression(epsilon)) +
+  scale_x_continuous(breaks = c(-10, 0, 10, 20)) +
+  labs(title = expression("TPCs with constant area under the curve and baseline of" ~ epsilon == 3))
+ggsave("tpc_constant_area.png", width = 10, height = 3)

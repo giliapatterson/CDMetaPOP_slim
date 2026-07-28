@@ -103,13 +103,14 @@ for (i in 1:nrow(parameter_combinations)){
 	qtl_region_length = 10^5
 	qtl_prop_region = 0.01
   Topt_baseline = 10.0
-  epsilon_baseline = 7.0
+  epsilon_baseline = 3.0
   Topt_VE = 1.0
   epsilon_VE = 0.1
-  Topt_cost = 0
-  epsilon_cost = 0
+  Topt_cost = 0.0
+  constant_area = 'T'
   Topt_pheno_eff = 'sample(c(-1,1), 1)*rexp(1, mu = 0.5)'
-  epsilon_pheno_eff = '0'
+  Topt_pheno_eff = '0.0'
+  epsilon_pheno_eff = 'sample(c(-1,1), 1)*rexp(1, mu = 0.1)'
   qtl_mutations_initial = 1000
   
   ## Making patchvars file
@@ -213,7 +214,7 @@ for (i in 1:nrow(parameter_combinations)){
                        Topt_VE,
                        epsilon_VE,
                        Topt_cost,
-                       epsilon_cost,
+                       constant_area,
                        Topt_pheno_eff,
                        epsilon_pheno_eff,
                        qtl_mutations_initial)

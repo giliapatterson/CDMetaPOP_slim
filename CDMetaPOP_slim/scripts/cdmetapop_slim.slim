@@ -47,7 +47,7 @@ function (void)updatePlotTPC(void)
 					xlab="temperature", ylab="performance");
 		colors = colors(length(plot_subpops), 'cividis');
 		for(i in seqAlong(epsilon)){
-			P = thermal_performance(temperature, Topt[i], epsilon[i], asFloat(TOPT_COST), asFloat(EPSILON_COST), asFloat(TOPT_BASELINE), asFloat(EPSILON_BASELINE));
+			P = thermal_performance(temperature, Topt[i], epsilon[i], asFloat(TOPT_COST), CONSTANT_AREA, asFloat(TOPT_BASELINE), asFloat(EPSILON_BASELINE));
 			plot.lines(temperature, P, colors[i]);
 		}
 		
@@ -102,8 +102,7 @@ initialize() {
 	defaults = Dictionary(
 		//"SEED", getSeed(), // random seed
 		"SEED", 5290, // random seed
-		//"RUNVARS_FILE", 'parameters/slim_output/slim_parameters/run1/RunVars_slim.csv', // File containing run info
-		"RUNVARS_FILE", 'run24/RunVars_slim.csv',
+		"RUNVARS_FILE", 'parameters/slim_output/slim_parameters/run2/RunVars_slim.csv', // File containing run info
 		"PARAM_FOLDER", './', // Folder containing parameter files
 		"IND_OUT_FOLDER", "results_gui/", // Folder for individual output
 		"ALLPOPS_OUT", "results_gui/summary_popAllTime.csv",
@@ -405,7 +404,7 @@ first(){
 			Topts = individuals.sumOfMutationsOfType(m2) + sum(sim.substitutionsOfType(m2).selectionCoeff) + rnorm(length(individuals), mean = 0, sd = sqrt(TOPT_VE)) + TOPT_BASELINE;
 			epsilons = individuals.sumOfMutationsOfType(m4) + sum(sim.substitutionsOfType(m4).selectionCoeff) + rnorm(length(individuals), mean = 0, sd = sqrt(EPSILON_VE)) + 	EPSILON_BASELINE;
 			individuals.setValuesVectorized("Topt", Topts);
-			individuals.setValuesVectorized("epsilon", epsilons);
+			individuals.setValuesVectorized("epsilon", pmax(0.001, epsilons));
 		}
 	}
 }
@@ -578,7 +577,7 @@ reproduction(NULL, "F") {
 				// Thermal performance curve scales fecundity
 				if(!QTL_TPC) pre_mort_neggs = num_eggs(individual);
 				if(QTL_TPC){
-					tpc_scale = thermal_performance(GrowthTemperatureBack[subpop.id], individual.getValue('Topt'), individual.getValue('epsilon'), asFloat(TOPT_COST), asFloat(EPSILON_COST), asFloat(TOPT_BASELINE), asFloat(EPSILON_BASELINE));
+					tpc_scale = thermal_performance(GrowthTemperatureBack[subpop.id], individual.getValue('Topt'), individual.getValue('epsilon'), asFloat(TOPT_COST), CONSTANT_AREA, asFloat(TOPT_BASELINE), asFloat(EPSILON_BASELINE));
 					pre_mort_neggs = asInteger(round(num_eggs(individual)*tpc_scale));
 				}
 				new_births = BIRTHS;
@@ -605,7 +604,7 @@ reproduction(NULL, "F") {
 					Topts = offspring.sumOfMutationsOfType(m2) + sum(sim.substitutionsOfType(m2).selectionCoeff) + rnorm(length(offspring), mean = 0, sd = sqrt(TOPT_VE)) + TOPT_BASELINE;
 					epsilons = offspring.sumOfMutationsOfType(m4) + sum(sim.substitutionsOfType(m4).selectionCoeff) + rnorm(length(offspring), mean = 0, sd = sqrt(EPSILON_VE)) + EPSILON_BASELINE;
 					offspring.setValuesVectorized("Topt", Topts);
-					offspring.setValuesVectorized("epsilon", epsilons);
+					offspring.setValuesVectorized("epsilon", pmax(0.001, epsilons));
 				}
 			}
 		}
@@ -885,7 +884,7 @@ late() {
 		epsilons = inds.getValue('epsilon');
 		patches = inds.subpopulation.id;
 		temperatures = GrowthTemperatureBack[patches];
-		psurvive = thermal_performance(temperatures, Topts, epsilons, asFloat(TOPT_COST), asFloat(EPSILON_COST), asFloat(TOPT_BASELINE), asFloat(EPSILON_BASELINE));
+		psurvive = thermal_performance(temperatures, Topts, epsilons, asFloat(TOPT_COST), CONSTANT_AREA, asFloat(TOPT_BASELINE), asFloat(EPSILON_BASELINE));
 		kill = inds[runif(length(inds)) > psurvive];
 		print(length(kill) + " individuals killed");
 		sim.killIndividuals(kill);
@@ -1148,10 +1147,25 @@ function (void)mature(object <Individual> individuals){
 }
 
 // Thermal performance curve
-function (float)thermal_performance(float temperature, float Topt, float epsilon, float Topt_cost, float epsilon_cost, float Topt_baseline, float epsilon_baseline){
+// Area under the curve
+function (float) area(float a, float b, float Topt, float epsilon){
+  area = exp((a - Topt)/epsilon)*(a - 2*epsilon - Topt) + exp((b - Topt)/epsilon)*(-b + 2*epsilon + Topt);
+  return(area);
+}
+function (float)thermal_performance(float temperature, float Topt, float epsilon, float Topt_cost, logical constant_area, float Topt_baseline, float epsilon_baseline){
 	x = (temperature-Topt)/epsilon;
-	cost_scaling = pmax(0.0, pmin(1 - abs(Topt - Topt_baseline)*Topt_cost - abs(epsilon - epsilon_baseline)*epsilon_cost, 1.0));
-   P = pmax(0.0, exp(x)*(1-x)*cost_scaling);
+	// Area at epsilon_baseline and Topt_baseline
+	ref_area = area(-50.0, Topt_baseline+epsilon_baseline, Topt_baseline, epsilon_baseline);
+	// Area of current curve
+	current_area = pmax(area(-50.0, Topt+epsilon, Topt, epsilon), ref_area);
+//	print("---");
+//	print(epsilon);
+//	print(current_area);
+//	print(ref_area);
+	// Penalty to achieve reference area
+	if(constant_area) area_penalty = ref_area/current_area; else area_penalty = 1.0;
+	Topt_cost_scaling = pmax(0.0, pmin(1 - abs(Topt - Topt_baseline)*Topt_cost, 1.0));
+   P = pmax(0.0, exp(x)*(1-x)*Topt_cost_scaling*area_penalty);
    // Independent environmental effect
    if(!isNULL(POPVARS.getValue('independent_environment_mean'))){
    	env_mean = asFloat(POPVARS.getValue('independent_environment_mean'));
@@ -1159,6 +1173,7 @@ function (float)thermal_performance(float temperature, float Topt, float epsilon
    	scaling = dnorm(temperature, mean = env_mean, sd = env_sd)/dnorm(env_mean, mean = env_mean, sd = env_sd);
    	P = P*scaling;
    }
+   //print(P);
    return(P);
 }
 
@@ -1384,7 +1399,7 @@ function (void)setupConstantsFromPopVars(object<Dictionary>$ popvars)
 		defineConstant("TOPT_VE", popvars.getValue('Topt_VE'));
 		defineConstant("EPSILON_VE", popvars.getValue('epsilon_VE'));
 		defineConstant("TOPT_COST", popvars.getValue('Topt_cost'));
-		defineConstant("EPSILON_COST", popvars.getValue('epsilon_cost'));
+		defineConstant("CONSTANT_AREA", popvars.getValue('constant_area'));
 		defineConstant("TOPT_PHENO_EFF", popvars.getValue('Topt_pheno_eff') + ";");
 		defineConstant("EPSILON_PHENO_EFF", popvars.getValue('epsilon_pheno_eff') + ";");
 	}

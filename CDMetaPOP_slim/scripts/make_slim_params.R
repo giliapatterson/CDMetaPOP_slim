@@ -333,7 +333,7 @@ for(run in 1:nruns){
                         "Topt_VE",
                         "epsilon_VE",
                         "Topt_cost",
-                        "epsilon_cost",
+                        "constant_area",
                         "Topt_pheno_eff",
                         "epsilon_pheno_eff")
       if(has_name(popvars, "qtl_mutations_initial")){

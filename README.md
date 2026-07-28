@@ -177,13 +177,20 @@ $$T_{opt,j} = \sum_{h=1}^{2}\sum_{i \in T_{opt} \text{ sites}}a_{ijh} + B_{T_{op
 where $a_{ijh}$ is the phenotyic effect of the allele at locus $i$, on the $h^{th}$ copy of the genome of individual $j$, $B_{T_{opt}}$ is the baseline phenotype for $T_{opt}$, and $E_{T_{opt},j}$ is the additive effect of the environment on $T_{opt}$ for individual $j$. $E_{T_{opt},j}$ is drawn from a normal distribution with mean 0 and variance $V_{E, T_{opt}}$. 
 $\epsilon$ for an individual $j$ is calculated similarly, with
 $$\epsilon_{j} = \sum_{h=1}^{2}\sum_{i \in \epsilon \text{ sites}}a_{ijh} + B_{\epsilon} + E_{\epsilon,j}$$
-where $B_{\epsilon}$ is the baseline phenotype for $\epsilon$ and $E_{\epsilon,j}$ is drawn from a normal distribution with mean 0 and variance $V_{E, \epsilon}$. 
+where $B_{\epsilon}$ is the baseline phenotype for $\epsilon$ and $E_{\epsilon,j}$ is drawn from a normal distribution with mean 0 and variance $V_{E, \epsilon}$. $\epsilon$ is restricted to be greater than 0.001.
 
 The genome is initialized with no mutations and all individuals have $T_{opt} = B_{T_{opt}}$ and $\epsilon = B_{\epsilon}$. Mutations accumulate at the rate specified for each chromosome, introducing variation in thermal performance curves between individuals.
 
-Because becoming more tolerant to hot or cold temperature can decrease an individuals overall performance, we also introduce a potential cost to increasing or decreasing $T_{opt}$ or $\epsilon$ by one degree Celsius from the baseline value. Cost is specified by the user. The cost scales the thermal performance curve by 
-$$\max\left(0, 1 - |T_{opt} - B_{T_{opt}}|C_{T_{opt}} - |\epsilon - B_{\epsilon}|C_{\epsilon}\right).$$
-When cost is not set to 0, individuals with very low or very high values of $T_{opt}$ or $\epsilon$ will have lower maximum performance.
+Because becoming more tolerant to hot or cold temperature can decrease an individuals overall performance, we introduce a potential cost to increasing or decreasing $T_{opt}$ by one degree Celsius from the baseline value. Cost is specified by the user. The cost scales the thermal performance curve by 
+$$\max\left(0, 1 - |T_{opt} - B_{T_{opt}}|C_{T_{opt}}\right).$$
+When cost is not set to 0, individuals with very low or very high values of $T_{opt}$ will have lower maximum performance.
+
+Because having a broader performance curve can also have a cost, we introduce the option to keep the area under the curve roughly the same as $\epsilon$ increases. We compute the area under the curve by integrating the TPC from -50 to $CT_{max}$. Integrating from $-\infty$ would give an infinite area. The area under the curve is given by:
+$$A(\epsilon, T_{opt}) = e^{(-50 - Topt)/\epsilon}(-50 - 2\epsilon - T_{opt}) + e^{(CT_{max} - T_{opt})/\epsilon}(-CT_{max} + 2\epsilon + T_{opt})$$
+To keep the area under the curve constant relative to the area at baseline as $\epsilon$ increases, we multiply the TPC by:
+$$\max\left[\frac{A(B_{\epsilon}, B_{T_{opt}})}{A(\epsilon, T_{opt})}, 1.0\right].$$
+
+<img src="example_runs/evolution_of_tpc/tpc_constant_area.png" alt="Examples of thermal performance curve with area constant.">
 
 The thermal performance curve influences fitness in two steps: fecundity and mortality. Mortality takes place immediately after dispersal and before density-dependent and age-dependent survival. An individual's probability of survival is the value of their thermal performance curve at the temperature they are currently experiencing. This temperature is `GrowthTemperatureBack` in their current patch.
 
@@ -223,7 +230,7 @@ In PopVars:
 
 `Topt_cost`: Cost of changing $T_{opt}$ by 1 degree Celsius from `Topt_baseline`.
 
-`epsilon_cost`: Cost of changing $\epsilon$ by 1 degree Celsius from `epsilon_baseline`.
+`constant_area`: ('T' or 'F') If 'T', the area under the thermal performance curve is set to the area under the curve for $\epsilon$ =  `epsilon_baseline`. When $\epsilon$ > `epsilon_baseline`, the TPC is multiplied by a scaling factor to keep the area under the curve the same. If $\epsilon$ < `epsilon_baseline`, no scaling factor is applied.
 
 In RunVars:
 
