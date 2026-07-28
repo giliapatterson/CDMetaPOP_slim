@@ -325,9 +325,7 @@ for(run in 1:nruns){
     if(has_name(popvars, "Topt_pheno_eff")){
       popvars_used <- c(popvars_used,
                         "genome", 
-                        "qtl_regions",
-                        "qtl_prop_region",
-                        "qtl_region_length",
+                        "qtl_prop_genome",
                         "Topt_baseline",
                         "epsilon_baseline",
                         "Topt_VE",
