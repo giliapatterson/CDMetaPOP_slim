@@ -103,16 +103,16 @@ initialize() {
 		//"SEED", getSeed(), // random seed
 		"SEED", 5290, // random seed
 		//"RUNVARS_FILE", 'parameters/slim_output/slim_parameters/run1/RunVars_slim.csv', // File containing run info
-		"RUNVARS_FILE", 'parameters_vulnerability/slim_output/slim_parameters/run2/RunVars_slim.csv',
+		"RUNVARS_FILE", 'run24/RunVars_slim.csv',
 		"PARAM_FOLDER", './', // Folder containing parameter files
-		"IND_OUT_FOLDER", "./", // Folder for individual output
-		"ALLPOPS_OUT", "./summary_popAllTime.csv",
-		"BYCLASS", "./summary_classAllTime.csv",
-		"QTL_OUT", "./QTL_overall.csv",
-		"QTL_SUBPOPS_OUT", "./QTL_subpops.csv",
-		"MUTATION_OUTPUT_FILE", "./mutation_origins.csv",
-		"MUTATION_EFFECTS_OUTPUT_FILE", "./mutation_effects.csv",
-		"FINISHED", "./finished.txt",
+		"IND_OUT_FOLDER", "results_gui/", // Folder for individual output
+		"ALLPOPS_OUT", "results_gui/summary_popAllTime.csv",
+		"BYCLASS", "results_gui/summary_classAllTime.csv",
+		"QTL_OUT", "results_gui/QTL_overall.csv",
+		"QTL_SUBPOPS_OUT", "results_gui/QTL_subpops.csv",
+		"MUTATION_OUTPUT_FILE", "results_gui/mutation_origins.csv",
+		"MUTATION_EFFECTS_OUTPUT_FILE", "results_gui/mutation_effects.csv",
+		"FINISHED", "results_gui/finished.txt",
 		"SCALEPOPSIZE",1.0, // Decrease (or increase) carrying capacities for testing
 		"NPATCHES", 'all', // Decrease number of patches for testing
 		"TREESEQ", 'false',
@@ -206,20 +206,59 @@ initialize() {
 		initializeMutationType("m2", 0.5, "s", TOPT_PHENO_EFF);
 		// Neutral
 		initializeMutationType("m3", 0.5, "f", 0.0);
-		//CTmax
+		//Epsilon
 		initializeMutationType("m4", 0.5, "s", EPSILON_PHENO_EFF);
-		initializeGenomicElementType("g2", c(m2, m3, m4), c(QTL_PROP_GENOME/2, 1.0-QTL_PROP_GENOME, QTL_PROP_GENOME/2));
+		// Genomic element for QTL regions that control Topt and epsilon
+		initializeGenomicElementType("g2", c(m2, m3, m4), c(QTL_PROP_REGION/2, 1.0-QTL_PROP_REGION, QTL_PROP_REGION/2));
+		// Genomic element for neutral regions
+		initializeGenomicElementType("g3", m3, 1.0);
+		// Read in genome
 		genome = readCSV(PARAM_FOLDER + POPVARS.getValue('genome')[0]);
+		// Distribute QTL regions among chromosomes
+		qtl_chroms = sample(0:(genome.nrow-1), QTL_REGIONS, replace = T, weights = genome.getValue('Length')/sum(genome.getValue('Length')));
+		// Number of qtls on each chromosome
+		qtl_counts = tabulate(qtl_chroms, genome.nrow - 1);
 		for(i in 0:(genome.nrow-1)){
 			row = genome.subsetRows(i);
 			id = row.getValue('Chromosome');
-			length = row.getValue('Length');
+			length = asInteger(row.getValue('Length'));
 			rr = row.getValue('recombination_rate');
 			mr = row.getValue('mutation_rate');
-			initializeChromosome(id, asInteger(length), type = "A", symbol = "c" + id);
-			initializeMutationRate(mr);
+			potential_nqtls = qtl_counts[i];
+			print(potential_nqtls + " QTLs");
+			// Pick start positions for QTL regions
+			potential_starts = 0:asInteger(length/QTL_REGION_LENGTH - 1)*QTL_REGION_LENGTH;
+			nqtls = min(potential_nqtls, length(potential_starts));
+			qtl_starts = sort(sample(potential_starts, nqtls));
+			// Add QTL genomic elements to QTL regions and neutral genomic elements to in between regions
+			// Keep track of mutation rate regions
+			region_ends = c();
+			mutation_rates = c();
+			initializeChromosome(id, length, type = "A", symbol = "c" + id);
+			neutral_start = 0;
+			if(nqtls > 0) neutral_end = qtl_starts[0] - 1; else neutral_end = length - 1;
+			if(neutral_end > 0){
+				initializeGenomicElement(g3, start = asInteger(neutral_start), end = asInteger(neutral_end));
+				region_ends = c(region_ends, asInteger(neutral_end));
+				mutation_rates = c(mutation_rates, 0.0);
+			}
+			if(nqtls > 0){
+				for(k in 0:(length(qtl_starts)-1)){
+					start_pos = qtl_starts[k];
+					neutral_start = start_pos + QTL_REGION_LENGTH;
+					if (k < length(qtl_starts) - 1) neutral_end = qtl_starts[k + 1] - 1; else neutral_end = length - 1;
+					initializeGenomicElement(g2, start = asInteger(start_pos), end = asInteger(start_pos + QTL_REGION_LENGTH - 1));
+					region_ends = c(region_ends, asInteger(start_pos + QTL_REGION_LENGTH - 1));
+					mutation_rates = c(mutation_rates, mr*QTL_PROP_REGION);
+					if(neutral_end > neutral_start){
+						initializeGenomicElement(g3, start = asInteger(neutral_start), end = asInteger(neutral_end));
+						region_ends = c(region_ends, asInteger(neutral_end));
+						mutation_rates = c(mutation_rates, 0.0);
+					}
+				}
+			}
+			initializeMutationRate(mutation_rates, ends = region_ends);
 			initializeRecombinationRate(rr*1e-8);
-			initializeGenomicElement(g2);
 		}
 		m2.convertToSubstitution = T;
 		m4.convertToSubstitution = T;
@@ -329,15 +368,31 @@ first(){
 				}
 			}
 		}
-		if(!isNULL(POPVARS.getValue('qtl_mutations_initial')) & GENOME_FILE){
+		if(!isNULL(POPVARS.getValue('qtl_mutations_initial')) & GENOME_FILE & !QTL_TPC){
 			nmutations = asInteger(POPVARS.getValue('qtl_mutations_initial'));
 			if(nmutations > 0){
 				mut_chroms = sample(sim.chromosomes, nmutations, replace = T, weights = sim.chromosomes.length/sum(sim.chromosomes.length));
 				for(chrom in mut_chroms){
 					locus = sample(0:chrom.lastPosition, 1);
 					mut_hap = sample(sim.subpopulations.haplosomesForChromosomes(chrom), 1);
-					if(!QTL_TPC) mut_hap.addNewDrawnMutation(m2, locus);
-					if(QTL_TPC) mut_hap.addNewDrawnMutation(sample(c(m2, m4), 1), locus);
+					mut_hap.addNewDrawnMutation(m2, locus);
+				}
+			}
+		}
+		if(!isNULL(POPVARS.getValue('qtl_mutations_initial')) & GENOME_FILE & QTL_TPC){
+			nmutations = asInteger(POPVARS.getValue('qtl_mutations_initial'));
+			print("nmutations " + nmutations + " per QTL region");
+			if(nmutations > 0){
+				for(chrom in sim.chromosomes){
+					QTL_ends = chrom.mutationEndPositions[chrom.mutationRates > 0];
+					QTL_starts = QTL_ends - QTL_REGION_LENGTH + 1;
+					if(length(QTL_ends) > 0){
+						for(qtl_i in 0:(length(QTL_starts) - 1)){
+							loci = asInteger(sample(QTL_starts[qtl_i]:QTL_ends[qtl_i], nmutations));
+							mut_hap = sample(sim.subpopulations.haplosomesForChromosomes(chrom), nmutations);
+							for(mut_i in 0:(length(mut_hap) - 1)) mut_hap[mut_i].addNewDrawnMutation(sample(c(m2, m4), 1), loci[mut_i]);
+						}
+					}
 				}
 			}
 		}
@@ -630,6 +685,8 @@ early(){
 
 mutationEffect(m1) { return 1.0; }
 mutationEffect(m2) { return 1.0; }
+mutationEffect(m3) { return 1.0; }
+mutationEffect(m4) { return 1.0; }
 
 
 late(){
@@ -664,6 +721,7 @@ late(){
 	}
 	defineGlobal("DEATHS1", nkilled.getValue("nkilled_subpops"));
 	defineGlobal("DEATHS1_AGE", nkilled.getValue("nkilled_ages"));
+	print(sum(DEATHS1) + " individuals killed.");
 	if(sum(sim.subpopulations.individualCount) == 0){
 		if(TREESEQ == 'true') sim.treeSeqOutput(TREESEQ_FILE, overwriteDirectory=T);
 		writeFile(FINISHED, "Simulation extinct");
@@ -764,6 +822,46 @@ late(){
 }
 
 late() {
+	
+	// Density dependent mortality
+	if(POPVARS.getValue("popmodel") == "packing"){
+		print("Packing back");
+		nkilled = packing();
+	}
+	if(POPVARS.getValue("popmodel") == "N"){
+		print("Density dependent back");
+		nkilled = carrying_capacity_mortality();
+	}
+	defineGlobal("DEATHS2", nkilled.getValue("nkilled_subpops"));
+	defineGlobal("DEATHS2_AGE", nkilled.getValue("nkilled_ages"));	
+	print(sum(DEATHS2) + " individuals killed.");
+	if(sum(sim.subpopulations.individualCount) == 0){
+		if(TREESEQ == 'true') sim.treeSeqOutput(TREESEQ_FILE, overwriteDirectory=T);
+		writeFile(FINISHED, "Simulation extinct");
+		stop("Extinct in " + (clock() - start) + " seconds.");
+	}
+	
+}
+
+late(){
+	// Age-dependent mortality back
+	print("Age-dependent mortality back");
+	individuals = sim.subpopulations.individuals;
+	age_classes = age_class(individuals, method = "age");
+	prob_dies = CLASSVARS.getValue("Age Mortality Back %")[age_classes];
+	kill = individuals[runif(length(individuals)) < prob_dies];
+	sim.killIndividuals(kill);
+	print(length(kill) + " individuals died.");
+	
+	defineGlobal("N2", sim.subpopulations.individualCount);
+	if(sum(sim.subpopulations.individualCount) == 0){
+		if(TREESEQ == 'true') sim.treeSeqOutput(TREESEQ_FILE, overwriteDirectory=T);
+		writeFile(FINISHED, "Simulation extinct");
+		stop("Extinct in " + (clock() - start) + " seconds.");
+	}
+}
+
+late() {
 	// QTL selection
 	if(QTL & !QTL_TPC){
 		print("QTL selection back");
@@ -792,45 +890,6 @@ late() {
 		print(length(kill) + " individuals killed");
 		sim.killIndividuals(kill);
 	}
-	if(sum(sim.subpopulations.individualCount) == 0){
-		if(TREESEQ == 'true') sim.treeSeqOutput(TREESEQ_FILE, overwriteDirectory=T);
-		writeFile(FINISHED, "Simulation extinct");
-		stop("Extinct in " + (clock() - start) + " seconds.");
-	}
-}
-
-late() {
-	
-	// Density dependent mortality
-	if(POPVARS.getValue("popmodel") == "packing"){
-		print("Packing back");
-		nkilled = packing();
-	}
-	if(POPVARS.getValue("popmodel") == "N"){
-		print("Density dependent back");
-		nkilled = carrying_capacity_mortality();
-	}
-	defineGlobal("DEATHS2", nkilled.getValue("nkilled_subpops"));
-	defineGlobal("DEATHS2_AGE", nkilled.getValue("nkilled_ages"));	
-	if(sum(sim.subpopulations.individualCount) == 0){
-		if(TREESEQ == 'true') sim.treeSeqOutput(TREESEQ_FILE, overwriteDirectory=T);
-		writeFile(FINISHED, "Simulation extinct");
-		stop("Extinct in " + (clock() - start) + " seconds.");
-	}
-	
-}
-
-late(){
-	// Age-dependent mortality back
-	print("Age-dependent mortality back");
-	individuals = sim.subpopulations.individuals;
-	age_classes = age_class(individuals, method = "age");
-	prob_dies = CLASSVARS.getValue("Age Mortality Back %")[age_classes];
-	kill = individuals[runif(length(individuals)) < prob_dies];
-	sim.killIndividuals(kill);
-	print(length(kill) + " individuals died.");
-	
-	defineGlobal("N2", sim.subpopulations.individualCount);
 	if(sum(sim.subpopulations.individualCount) == 0){
 		if(TREESEQ == 'true') sim.treeSeqOutput(TREESEQ_FILE, overwriteDirectory=T);
 		writeFile(FINISHED, "Simulation extinct");
@@ -1317,6 +1376,9 @@ function (void)setupConstantsFromPopVars(object<Dictionary>$ popvars)
 	}
 	if(QTL_TPC){
 		defineConstant("QTL_PROP_GENOME", popvars.getValue('qtl_prop_genome'));
+		defineConstant('QTL_REGIONS', popvars.getValue('qtl_regions'));
+		defineConstant('QTL_REGION_LENGTH', popvars.getValue('qtl_region_length'));
+		defineConstant('QTL_PROP_REGION', popvars.getValue('qtl_prop_region'));
 		defineConstant("TOPT_BASELINE", popvars.getValue('Topt_baseline'));
 		defineConstant("EPSILON_BASELINE", popvars.getValue('epsilon_baseline'));
 		defineConstant("TOPT_VE", popvars.getValue('Topt_VE'));
@@ -1635,8 +1697,8 @@ function (string) mutationalOrigins(string header_string, integer focal_subpop_i
 				freqs800 = matrix(focal_mutations.getValue('freqs800'), nrow = length(sim.subpopulations));
 				current_counts = sim.mutationCounts(focal_subpop, focal_mutations);
 				if(length(focal_subs) > 0){
-					freqs800_subs = matrix(sim.substitutions.getValue('freqs800'), nrow = length(sim.subpopulations));
-					current_counts_subs = rep(focal_subpop.individualCount*2, length(sim.substitutions));
+					freqs800_subs = matrix(focal_subs.getValue('freqs800'), nrow = length(sim.subpopulations));
+					current_counts_subs = rep(focal_subpop.individualCount*2, length(focal_subs));
 					Topt_count_origin_tick = sapply(sim.subpopulations.id, "sum(current_counts*freqs800[applyValue,]) + sum(current_counts_subs*freqs800_subs[applyValue,]);");
 				}
 				else{
@@ -1657,8 +1719,8 @@ function (string) mutationalOrigins(string header_string, integer focal_subpop_i
 				freqs800 = matrix(focal_mutations.getValue('freqs800'), nrow = length(sim.subpopulations));
 				current_counts = sim.mutationCounts(focal_subpop, focal_mutations);
 				if(length(focal_subs) > 0){
-					freqs800_subs = matrix(sim.substitutions.getValue('freqs800'), nrow = length(sim.subpopulations));
-					current_counts_subs = rep(focal_subpop.individualCount*2, length(sim.substitutions));
+					freqs800_subs = matrix(focal_subs.getValue('freqs800'), nrow = length(sim.subpopulations));
+					current_counts_subs = rep(focal_subpop.individualCount*2, length(focal_subs));
 					neutral_count_origin_tick = sapply(sim.subpopulations.id, "sum(current_counts*freqs800[applyValue,]) + sum(current_counts_subs*freqs800_subs[applyValue,]);");
 				}
 				else{
@@ -1679,8 +1741,8 @@ function (string) mutationalOrigins(string header_string, integer focal_subpop_i
 				freqs800 = matrix(focal_mutations.getValue('freqs800'), nrow = length(sim.subpopulations));
 				current_counts = sim.mutationCounts(focal_subpop, focal_mutations);
 				if(length(focal_subs) > 0){
-					freqs800_subs = matrix(sim.substitutions.getValue('freqs800'), nrow = length(sim.subpopulations));
-					current_counts_subs = rep(focal_subpop.individualCount*2, length(sim.substitutions));
+					freqs800_subs = matrix(focal_subs.getValue('freqs800'), nrow = length(sim.subpopulations));
+					current_counts_subs = rep(focal_subpop.individualCount*2, length(focal_subs));
 					epsilon_count_origin_tick = sapply(sim.subpopulations.id, "sum(current_counts*freqs800[applyValue,]) + sum(current_counts_subs*freqs800_subs[applyValue,]);");
 				}
 				else{
@@ -1739,19 +1801,19 @@ function (void) writeMutationalOrigins(string outfile, logical header, integer f
 	return;
 }
 function (void) writeMutationEffects(string outfile, logical header){
-	header_string = "tick,substitution,phenotype,effect";
+	header_string = "tick,substitution,phenotype,effect,frequency,count,id";
 	if(header){
 		writeFile(outfile, header_string);
 		return;
 	}
-	topt_subs = unique(sim.substitutionsOfType(m2)).selectionCoeff;
-	topt_muts = unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2)).selectionCoeff;
-	epsilon_subs = unique(sim.substitutionsOfType(m4)).selectionCoeff;
-	epsilon_muts = unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(m4)).selectionCoeff;
-	if(length(topt_subs) > 0) writeFile(outfile, paste(sapply(topt_subs, "paste0(community.tick, ',', 'T', ',', 'Topt', ',', applyValue);"), sep = '\n'), append = T);
-	if(length(epsilon_subs) > 0) writeFile(outfile, paste(sapply(epsilon_subs, "paste0(community.tick, ',', 'T', ',', 'epsilon', ',', applyValue);"), sep = '\n'), append = T);
-	if(length(topt_muts) > 0) writeFile(outfile, paste(sapply(topt_muts, "paste0(community.tick, ',', 'F', ',', 'Topt', ',', applyValue);"), sep = '\n'), append = T);
-	if(length(epsilon_muts) > 0) writeFile(outfile, paste(sapply(epsilon_muts, "paste0(community.tick, ',', 'F', ',', 'epsilon', ',', applyValue);"), sep = '\n'), append = T);
+	topt_subs = unique(sim.substitutionsOfType(m2));
+	topt_muts = unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2));
+	epsilon_subs = unique(sim.substitutionsOfType(m4));
+	epsilon_muts = unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(m4));
+	if(length(topt_subs) > 0) writeFile(outfile, paste(sapply(topt_subs, "paste0(community.tick, ',', 'T', ',', 'Topt', ',', applyValue.selectionCoeff, ',', 1.0,',', sum(sim.subpopulations.individualCount) ,',', applyValue.id);"), sep = '\n'), append = T);
+	if(length(epsilon_subs) > 0) writeFile(outfile, paste(sapply(epsilon_subs, "paste0(community.tick, ',', 'T', ',', 'epsilon', ',', applyValue.selectionCoeff, ',', 1.0,',', sum(sim.subpopulations.individualCount) ,',', applyValue.id);"), sep = '\n'), append = T);
+	if(length(topt_muts) > 0) writeFile(outfile, paste(sapply(topt_muts, "paste0(community.tick, ',', 'F', ',', 'Topt', ',', applyValue.selectionCoeff, ',', sim.mutationFrequencies(NULL, applyValue),',', sim.mutationCounts(NULL, applyValue) ,',', applyValue.id);"), sep = '\n'), append = T);
+	if(length(epsilon_muts) > 0) writeFile(outfile, paste(sapply(epsilon_muts, "paste0(community.tick, ',', 'F', ',', 'epsilon', ',', applyValue.selectionCoeff, ',', sim.mutationFrequencies(NULL, applyValue), ',', sim.mutationCounts(NULL, applyValue) ,',', applyValue.id);"), sep = '\n'), append = T);
 	return;
 }
 

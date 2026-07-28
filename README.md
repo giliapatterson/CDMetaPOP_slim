@@ -172,7 +172,7 @@ where $x = (t-T_{opt})/\epsilon$. $T_{opt}$ is the temperature in degrees Celsiu
 
 <img src="example_runs/trout_genome/thermal_performance/tpc.png" alt="An example of a thermal performance curve. The optimal thermal performance is 1.0 at T opt equals 10 degrees celsius. Performance sharply declines to 0 as temperature increases, with performance of 0 at T opt plus epsilon equals 17 degrees celsius">
 
-$T_{opt}$ and $\epsilon$ are modeled as independent quantitative traits. Mutations at half of the non-neutral sites in the genome influence $T_{opt}$ and mutations in the other half influence $\epsilon$. $T_{opt}$ for an individual $j$ is calculated as
+$T_{opt}$ and $\epsilon$ are modeled as independent quantitative traits. Variants that affect $T_{opt}$ and $\epsilon$ are located in QTL regions distributed randomly across the genome. The user specifies the number and length of these regions, as well as the proportion of sites within each region where a mutation will affect either $T_{opt}$ or $\epsilon$. The rest of the sites are neutral. The mutation rate within neutral regions is set to 0. A user can overlay neutral mutations using tree sequences if needed. Mutations at half of the non-neutral sites in the genome influence $T_{opt}$ and mutations in the other half influence $\epsilon$. $T_{opt}$ for an individual $j$ is calculated as
 $$T_{opt,j} = \sum_{h=1}^{2}\sum_{i \in T_{opt} \text{ sites}}a_{ijh} + B_{T_{opt}} + E_{T_{opt},j}$$
 where $a_{ijh}$ is the phenotyic effect of the allele at locus $i$, on the $h^{th}$ copy of the genome of individual $j$, $B_{T_{opt}}$ is the baseline phenotype for $T_{opt}$, and $E_{T_{opt},j}$ is the additive effect of the environment on $T_{opt}$ for individual $j$. $E_{T_{opt},j}$ is drawn from a normal distribution with mean 0 and variance $V_{E, T_{opt}}$. 
 $\epsilon$ for an individual $j$ is calculated similarly, with
@@ -201,7 +201,13 @@ In PopVars:
 
 `genome`: Path to file containing information on the genome. This file contains four columns: `Chromosome`, `Length`, `recombination_rate`, and `mutation_rate`. These parameters cannot change over time.
 
-`qtl_prop_genome`: The proportion of the genome where new mutations influence phenotype. In the remainder of the genome, mutations are neutral. Half of the non-neutral sites influence $T_{opt}$ and half influence $\epsilon$. Cannot change over time.
+`qtl_regions`: Number of QTL regions in the genome. If the number specified cannot fit in the genome, the number of QTL regions will be reduced.
+
+`qtl_region_length`: Length in base pairs of each QTL region.
+
+`qtl_prop_region`: The proportion of QTL regions where new mutations influence phenotype. In the remainder of the genome, mutations are neutral. Half of the non-neutral sites influence $T_{opt}$ and half influence $\epsilon$. Cannot change over time.
+
+`qtl_mutations_initial`: Number of mutations influencing $T_{opt}$ and $\epsilon$ to be added to each QTL region in the first generation.
 
 `Topt_pheno_eff`: A piece of code for drawing the effect of a new mutation on $T_{opt}$. This code should return a single value. Any of the distribution functions from R will work, e.g. "rnorm(1, 0, 5.0)" or "rexp(1, 1)". So will sampling from a fixed set of phenotypic effects, e.g. "sample(c(-1, 0, 1), 1)".
 
@@ -258,6 +264,22 @@ CDMetaPOP_slim will also output an additional file, `mutation_origins.csv `, tha
 `Topt_VA`: Additive genetic variance of mutations influencing $T_{opt}$ in the focal patch that originated in the source patch.
 
 `epsilon_VA`: : Additive genetic variance of mutations influencing $\epsilon$ in the focal patch that originated in the source patch.
+
+Information on all mutations will be recorded in the file `mutation_effects.csv`. The columns of this file are:
+
+`tick`: Current year
+
+`substitution`: Is the mutation fixed in the population?
+
+`phenotype`: Trait affected by the mutation. $T_{opt}$ or $\epsilon$
+
+`effect`: Effect of the mutation on phenotype
+
+`frequency`: Frequency of the mutation in the population.
+
+`count`: Number of copies of the mutation in the population.
+
+`id`: Number that identifies this mutation. ID is consistent throughout the simulation and uniquely identifies mutations.
 
 ### References for thermal performance curve model
 
