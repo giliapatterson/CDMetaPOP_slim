@@ -99,9 +99,7 @@ for (i in 1:nrow(parameter_combinations)){
   
   ## QTL variables
   genome = 'genome.csv'
-  qtl_regions = 100
-	qtl_region_length = 10^5
-	qtl_prop_region = 0.01
+  qtl_prop_genome = 1.0
   Topt_baseline = 10.0
   epsilon_baseline = 7.0
   Topt_VE = 1.0
@@ -205,9 +203,7 @@ for (i in 1:nrow(parameter_combinations)){
                        Egg_Mortality,
                        popmodel,popmodel_par1,
                        genome, 
-                       qtl_region_length,
-                       qtl_regions,
-                       qtl_prop_region,
+                       qtl_prop_genome,
                        Topt_baseline,
                        epsilon_baseline,
                        Topt_VE,
@@ -278,7 +274,7 @@ trout_arms <- trout_contigs |> mutate(length = nchar(Consensus)) |>
 trout_chroms <- trout_arms |> group_by(Chromosome) |>
   reframe(Length = sum(Length))
 # Remove sex chromosome (30) and compute recombination rates for smaller chromosomes
-scale = 1.0
+scale = 0.01
 trout_genome <- trout_chroms |> mutate(recombination_rate = 3) |>
   mutate(Length = Length*scale, recombination_rate = recombination_rate/scale,
          mutation_rate = 1e-7) |>
