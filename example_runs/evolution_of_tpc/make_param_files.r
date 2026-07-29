@@ -171,7 +171,7 @@ for (i in 1:nrow(parameter_combinations)){
     GrowthTemperatureBack = apply(GrowthTemperatureBack_matrix, 1, paste, collapse = "|")
   }
   if(nclimgen == 1){GrowthTemperatureBack = patches$mean_temp}
-  GrowthTemperatureBackStDev = 0
+  GrowthTemperatureBackStDev = 0.5
   GrowDaysBack = 365
   GrowDaysBackStDev = 0
   patchvars_df <- tibble(PatchID,X,Y,K,'K StDev' = KStDev,N0,
