@@ -102,7 +102,7 @@ initialize() {
 	defaults = Dictionary(
 		//"SEED", getSeed(), // random seed
 		"SEED", 5290, // random seed
-		"RUNVARS_FILE", 'parameters/slim_output/slim_parameters/run2/RunVars_slim.csv', // File containing run info
+		"RUNVARS_FILE", 'parameters2/slim_output/slim_parameters/run13/RunVars_slim.csv', // File containing run info
 		"PARAM_FOLDER", './', // Folder containing parameter files
 		"IND_OUT_FOLDER", "results_gui/", // Folder for individual output
 		"ALLPOPS_OUT", "results_gui/summary_popAllTime.csv",
@@ -208,7 +208,7 @@ initialize() {
 		//Epsilon
 		initializeMutationType("m4", 0.5, "s", EPSILON_PHENO_EFF);
 		// Genomic element for QTL regions that control Topt and epsilon
-		initializeGenomicElementType("g2", c(m2, m3, m4), c(QTL_PROP_REGION/2, 1.0-QTL_PROP_REGION, QTL_PROP_REGION/2));
+		initializeGenomicElementType("g2", c(m2, m4), c(0.5, 0.5));
 		// Genomic element for neutral regions
 		initializeGenomicElementType("g3", m3, 1.0);
 		// Read in genome
@@ -217,6 +217,10 @@ initialize() {
 		qtl_chroms = sample(0:(genome.nrow-1), QTL_REGIONS, replace = T, weights = genome.getValue('Length')/sum(genome.getValue('Length')));
 		// Number of qtls on each chromosome
 		qtl_counts = tabulate(qtl_chroms, genome.nrow - 1);
+		// Dictionary to store regions, mutation rates, and whether each region is a QTL or not
+		region_ends_dict = Dictionary();
+		is_qtl_dict = Dictionary();
+		mutation_rate_dict = Dictionary();
 		for(i in 0:(genome.nrow-1)){
 			row = genome.subsetRows(i);
 			id = row.getValue('Chromosome');
@@ -233,6 +237,7 @@ initialize() {
 			// Keep track of mutation rate regions
 			region_ends = c();
 			mutation_rates = c();
+			is_qtl = c();
 			initializeChromosome(id, length, type = "A", symbol = "c" + id);
 			neutral_start = 0;
 			if(nqtls > 0) neutral_end = qtl_starts[0] - 1; else neutral_end = length - 1;
@@ -240,6 +245,7 @@ initialize() {
 				initializeGenomicElement(g3, start = asInteger(neutral_start), end = asInteger(neutral_end));
 				region_ends = c(region_ends, asInteger(neutral_end));
 				mutation_rates = c(mutation_rates, 0.0);
+				is_qtl = c(is_qtl, F);
 			}
 			if(nqtls > 0){
 				for(k in 0:(length(qtl_starts)-1)){
@@ -248,19 +254,27 @@ initialize() {
 					if (k < length(qtl_starts) - 1) neutral_end = qtl_starts[k + 1] - 1; else neutral_end = length - 1;
 					initializeGenomicElement(g2, start = asInteger(start_pos), end = asInteger(start_pos + QTL_REGION_LENGTH - 1));
 					region_ends = c(region_ends, asInteger(start_pos + QTL_REGION_LENGTH - 1));
-					mutation_rates = c(mutation_rates, mr*QTL_PROP_REGION);
+					mutation_rates = c(mutation_rates, mr);
+					is_qtl = c(is_qtl, T);
 					if(neutral_end > neutral_start){
 						initializeGenomicElement(g3, start = asInteger(neutral_start), end = asInteger(neutral_end));
 						region_ends = c(region_ends, asInteger(neutral_end));
 						mutation_rates = c(mutation_rates, 0.0);
+						is_qtl = c(is_qtl, F);
 					}
 				}
 			}
-			initializeMutationRate(mutation_rates, ends = region_ends);
+			initializeMutationRate(mutation_rates*QTL_PROP_REGION, ends = region_ends);
+			region_ends_dict.setValue(id, region_ends);
+			is_qtl_dict.setValue(id, is_qtl);
+			mutation_rate_dict.setValue(id, mutation_rates);
 			initializeRecombinationRate(rr*1e-8);
 		}
 		m2.convertToSubstitution = T;
 		m4.convertToSubstitution = T;
+		defineConstant('GENOMIC_REGION_ENDS', region_ends_dict);
+		defineConstant('GENOMIC_REGION_QTL', is_qtl_dict);
+		defineConstant('GENOMIC_REGION_MUTATION_RATE', mutation_rate_dict);
 	}
 	if(GENOME_FILE & QTL & !QTL_TPC){
 		// Genome from file
@@ -383,7 +397,7 @@ first(){
 			print("nmutations " + nmutations + " per QTL region");
 			if(nmutations > 0){
 				for(chrom in sim.chromosomes){
-					QTL_ends = chrom.mutationEndPositions[chrom.mutationRates > 0];
+					QTL_ends = GENOMIC_REGION_ENDS.getValue(chrom.id)[GENOMIC_REGION_QTL.getValue(chrom.id)];
 					QTL_starts = QTL_ends - QTL_REGION_LENGTH + 1;
 					if(length(QTL_ends) > 0){
 						for(qtl_i in 0:(length(QTL_starts) - 1)){
@@ -512,7 +526,6 @@ CHANGE_YEARS first(){
 		defineGlobal("POPVARS", popvars_current);
 		setupGlobalsFromPopVars(POPVARS);
 		// Change QTL genome parameters
-		
 		if(NLOCI == 0 & QTL & !GENOME_FILE){
 			sim.chromosomes.setMutationRate(QTL_MUTERATE);
 			sim.chromosomes.setRecombinationRate(QTL_RECRATE);
@@ -520,6 +533,14 @@ CHANGE_YEARS first(){
 		if(NLOCI > 0 & QTL & !GENOME_FILE){
 			sim.chromosomes.setMutationRate(c(0, QTL_MUTERATE), c(NLOCI -1, asInteger(NLOCI + QTL_GEN_LENGTH - 1)));
 			sim.chromosomes.setRecombinationRate(c(0.5, QTL_RECRATE), c(NLOCI -1, asInteger(NLOCI + QTL_GEN_LENGTH - 1)));
+		}
+		if(GENOME_FILE & QTL & QTL_TPC){
+			for(chrom in sim.chromosomes){
+				region_ends = GENOMIC_REGION_ENDS.getValue(chrom.id);
+				mutation_rates = GENOMIC_REGION_MUTATION_RATE.getValue(chrom.id);
+				print("QTL prop region is now: " + QTL_PROP_REGION);
+				chrom.setMutationRate(mutation_rates*QTL_PROP_REGION, ends = region_ends);
+			}
 		}
 	}
 }
@@ -1390,10 +1411,8 @@ function (void)setupConstantsFromPopVars(object<Dictionary>$ popvars)
 		defineConstant("QTL_BASELINE", mean(PATCHVARS.getValue(QTL_ENV_VARIABLE)));
 	}
 	if(QTL_TPC){
-		defineConstant("QTL_PROP_GENOME", popvars.getValue('qtl_prop_genome'));
 		defineConstant('QTL_REGIONS', popvars.getValue('qtl_regions'));
 		defineConstant('QTL_REGION_LENGTH', popvars.getValue('qtl_region_length'));
-		defineConstant('QTL_PROP_REGION', popvars.getValue('qtl_prop_region'));
 		defineConstant("TOPT_BASELINE", popvars.getValue('Topt_baseline'));
 		defineConstant("EPSILON_BASELINE", popvars.getValue('epsilon_baseline'));
 		defineConstant("TOPT_VE", popvars.getValue('Topt_VE'));
@@ -1416,7 +1435,7 @@ function (void)setupGlobalsFromPopVars(object<Dictionary>$ popvars){
 	}
 	if(popvars.getValue('matemoveno') == '9'){
 		defineGlobal("MATING", "matrix");
-		mate_matrix = readCSV(PARAM_FOLDER + popvars.getValue('mate_cdmat'), colNames = asString(PATCHIDS));
+		mate_matrix = readCSV(PARAM_FOLDER + popvars.getValue('mate_cdmat'), colNames = asString(PATCHIDS), colTypes = paste0(rep('f', length(PATCHIDS))));
 		if (NPATCHES != "all"){mate_matrix = mate_matrix.subsetColumns(PATCHIDS).subsetRows(PATCHIDS);}
 		// Convert to float (idk why this is so involved! There must be a better way.)
 		for (i in PATCHIDS){
@@ -1431,21 +1450,21 @@ function (void)setupGlobalsFromPopVars(object<Dictionary>$ popvars){
 	// Don't allow individuals to go to non-natal grounds in the back step
 	
 	// Migration out matrix
-	migration_matrix = readCSV(PARAM_FOLDER + popvars.getValue('migrateout_cdmat'), colNames = asString(PATCHIDS)).asMatrix();
+	migration_matrix = readCSV(PARAM_FOLDER + popvars.getValue('migrateout_cdmat'), colNames = asString(PATCHIDS), colTypes = paste0(rep('f', length(PATCHIDS)))).asMatrix();
 	mgrounds = PATCHVARS.getValue("Migration Grounds");
 	migration_matrix[,mgrounds == 0] = 0; // Can't migrate to non-migration grounds
 	if (NPATCHES != "all"){migration_matrix = migration_matrix[PATCHIDS,PATCHIDS];}
 	defineGlobal("MIGRATIONOUT", asFloat(migration_matrix));
 	
 	// Straying matrix
-	stray_matrix = readCSV(PARAM_FOLDER + popvars.getValue('stray_cdmat'), colNames = asString(PATCHIDS)).asMatrix();
+	stray_matrix = readCSV(PARAM_FOLDER + popvars.getValue('stray_cdmat'), colNames = asString(PATCHIDS), colTypes = paste0(rep('f', length(PATCHIDS)))).asMatrix();
 	ngrounds = PATCHVARS.getValue("Natal Grounds");
 	stray_matrix[,ngrounds == 0] = 0; // Can't stray to non-natal grounds
 	if (NPATCHES != "all"){stray_matrix = stray_matrix[PATCHIDS,PATCHIDS];}
 	defineGlobal("STRAYMATRIX", asFloat(stray_matrix));
 	
 	// Migration back matrix
-	migration_matrix = readCSV(PARAM_FOLDER + popvars.getValue('migrateback_cdmat'), colNames = asString(PATCHIDS)).asMatrix();
+	migration_matrix = readCSV(PARAM_FOLDER + popvars.getValue('migrateback_cdmat'), colNames = asString(PATCHIDS), colTypes = paste0(rep('f', length(PATCHIDS)))).asMatrix();
 	migration_matrix[,ngrounds == 0] = 0; // Can't migrate back to non-natal grounds
 	if (NPATCHES != "all"){migration_matrix = migration_matrix[PATCHIDS,PATCHIDS];}
 	defineGlobal("MIGRATIONBACK", asFloat(migration_matrix));
@@ -1466,7 +1485,7 @@ function (void)setupGlobalsFromPopVars(object<Dictionary>$ popvars){
 	defineGlobal("RETURNMATRIX", return_matrix);
 	
 	// Dispersal matrix
-	dispersal_matrix = readCSV(PARAM_FOLDER + popvars.getValue('disperse_cdmat'), colNames = asString(PATCHIDS));
+	dispersal_matrix = readCSV(PARAM_FOLDER + popvars.getValue('disperse_cdmat'), colNames = asString(PATCHIDS), colTypes = paste0(rep('f', length(PATCHIDS))));
 	if (NPATCHES != "all"){dispersal_matrix = dispersal_matrix.subsetColumns(PATCHIDS).subsetRows(PATCHIDS);}
 	defineGlobal("DISPERSELOCAL", asFloat(dispersal_matrix.asMatrix()));
 	
@@ -1478,6 +1497,9 @@ function (void)setupGlobalsFromPopVars(object<Dictionary>$ popvars){
 	defineGlobal("QTL_RECRATE", popvars.getValue("qtl_recrate"));
 	defineGlobal("QTL_VE", popvars.getValue("qtl_ve"));
 	defineGlobal("QTL_FIT_SD", popvars.getValue("qtl_fit_sd"));
+	if(QTL_TPC){
+		defineGlobal('QTL_PROP_REGION', popvars.getValue('qtl_prop_region'));
+	}
 
 }
 

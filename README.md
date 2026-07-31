@@ -210,27 +210,27 @@ In PopVars:
 
 `qtl_regions`: Number of QTL regions in the genome. If the number specified cannot fit in the genome, the number of QTL regions will be reduced.
 
-`qtl_region_length`: Length in base pairs of each QTL region.
+`qtl_region_length`: Length in base pairs of each QTL region. Cannot change over time.
 
-`qtl_prop_region`: The proportion of QTL regions where new mutations influence phenotype. In the remainder of the genome, mutations are neutral. Half of the non-neutral sites influence $T_{opt}$ and half influence $\epsilon$. Cannot change over time.
+`qtl_prop_region`: The proportion of QTL regions where new mutations influence phenotype. In the remainder of the genome, mutations are neutral. Half of the non-neutral sites influence $T_{opt}$ and half influence $\epsilon$. Can change over time.
 
 `qtl_mutations_initial`: Number of mutations influencing $T_{opt}$ and $\epsilon$ to be added to each QTL region in the first generation.
 
-`Topt_pheno_eff`: A piece of code for drawing the effect of a new mutation on $T_{opt}$. This code should return a single value. Any of the distribution functions from R will work, e.g. "rnorm(1, 0, 5.0)" or "rexp(1, 1)". So will sampling from a fixed set of phenotypic effects, e.g. "sample(c(-1, 0, 1), 1)".
+`Topt_pheno_eff`: A piece of code for drawing the effect of a new mutation on $T_{opt}$. This code should return a single value. Any of the distribution functions from R will work, e.g. "rnorm(1, 0, 5.0)" or "rexp(1, 1)". So will sampling from a fixed set of phenotypic effects, e.g. "sample(c(-1, 0, 1), 1)". Cannot change over time
 
-`epsilon_pheno_eff`: A piece of code for drawing the effect of a new mutation on $\epsilon$.
+`epsilon_pheno_eff`: A piece of code for drawing the effect of a new mutation on $\epsilon$. Cannot change over time.
 
-`Topt_ve`: V_E for $T_{opt}$.
+`Topt_ve`: V_E for $T_{opt}$. Cannot change over time.
 
-`epsilon_ve`: V_E for $\epsilon$. 
+`epsilon_ve`: V_E for $\epsilon$. Cannot change over time.
 
-`Topt_baseline`: Value of $T_{opt}$ when no mutations influencing $T_{opt}$ are present.
+`Topt_baseline`: Value of $T_{opt}$ when no mutations influencing $T_{opt}$ are present. Cannot change over time.
 
-`epsilon_baseline`: Value of $\epsilon$ when no mutations influencing $\epsilon$ are present.
+`epsilon_baseline`: Value of $\epsilon$ when no mutations influencing $\epsilon$ are present. Cannot change over time.
 
-`Topt_cost`: Cost of changing $T_{opt}$ by 1 degree Celsius from `Topt_baseline`.
+`Topt_cost`: Cost of changing $T_{opt}$ by 1 degree Celsius from `Topt_baseline`. Cannot change over time.
 
-`constant_area`: ('T' or 'F') If 'T', the area under the thermal performance curve is set to the area under the curve for $\epsilon$ =  `epsilon_baseline`. When $\epsilon$ > `epsilon_baseline`, the TPC is multiplied by a scaling factor to keep the area under the curve the same. If $\epsilon$ < `epsilon_baseline`, no scaling factor is applied.
+`constant_area`: ('T' or 'F') If 'T', the area under the thermal performance curve is set to the area under the curve for $\epsilon$ =  `epsilon_baseline`. When $\epsilon$ > `epsilon_baseline`, the TPC is multiplied by a scaling factor to keep the area under the curve the same. If $\epsilon$ < `epsilon_baseline`, no scaling factor is applied. Cannot change over time.
 
 In RunVars:
 
