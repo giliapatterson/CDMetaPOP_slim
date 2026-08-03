@@ -65,19 +65,19 @@ time1 = time.perf_counter()
 # First check if the parameters have already been processed
 if not os.path.exists(slim_params):
     os.mkdir(slim_params)
-command = f"Rscript '{script_dir}/scripts/make_slim_params.R' --parameter_directory {datadir} \
-        --runvars_file_name {fileans} \
-        --output_directory {slim_params}"
-try:
-    retcode = subprocess.call(command, shell=True)
-    if retcode < 0:
-        print("Child was terminated by signal", -retcode, file=sys.stderr)
-except OSError as e:
-    print("Execution failed:", e, file=sys.stderr)
-    print(f"Return code: {retcode}")
-if retcode != 0:
-    print(f"Processing parameter files did not finish successfully.")
-    sys.exit(-1)
+    command = f"Rscript '{script_dir}/scripts/make_slim_params.R' --parameter_directory {datadir} \
+            --runvars_file_name {fileans} \
+            --output_directory {slim_params}"
+    try:
+        retcode = subprocess.call(command, shell=True)
+        if retcode < 0:
+            print("Child was terminated by signal", -retcode, file=sys.stderr)
+    except OSError as e:
+        print("Execution failed:", e, file=sys.stderr)
+        print(f"Return code: {retcode}")
+    if retcode != 0:
+        print(f"Processing parameter files did not finish successfully.")
+        sys.exit(-1)
 
 time2 = time.perf_counter()
 
