@@ -11,3 +11,5 @@ dependencies:
     - R
     - r-tidyverse
     - r-argparse
+    - r-duckdb
+    - r-sf
