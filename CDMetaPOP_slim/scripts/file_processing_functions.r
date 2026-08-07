@@ -4,7 +4,7 @@ add_one <- function(year_string){
 
 # Function to extract loci, alleles, and frequencies
 split_genes <- function(gene_file, PatchID){
-  genes <- read_csv(gene_file, show_col_types = FALSE)
+  genes <- read_table(gene_file)
   loci_and_allele <- genes$`Allele List`
   locus = str_extract(loci_and_allele, "^[^A]+(?=A\\d+$)")
   allele = as.numeric(str_extract(loci_and_allele, "(?<=A)\\d+$"))
@@ -27,7 +27,7 @@ patch_genes <- function(out_file, PatchID, all_genes){
                         paste0("Frequency_", PatchID),
                         paste0("PatchID_", PatchID)) |>
     rename(Frequency = paste0("Frequency_", PatchID))
-  write_csv(patch_genes, out_file)
+  write_table(patch_genes, out_file)
 }
 
 new_file_name <- function(new_directory, old_names){

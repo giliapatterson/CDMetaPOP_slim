@@ -2,6 +2,22 @@ suppressPackageStartupMessages(library(tidyverse))
 library(argparse)
 library(glue)
 
+if (requireNamespace("vroom", quietly = TRUE)) {
+  read_table <- function(path, ...) {
+    vroom::vroom(path, progress = FALSE, ...)
+  }
+  write_table <- function(x, path, ...) {
+    vroom::vroom_write(x, path, delim = ",", ...)
+  }
+} else {
+  read_table <- function(path, ...) {
+    readr::read_csv(path, show_col_types = FALSE, ...)
+  }
+  write_table <- function(x, path, ...) {
+    readr::write_csv(x, path)
+  }
+}
+
 thisFile <- function() {
         cmdArgs <- commandArgs(trailingOnly = FALSE)
         needle <- "--file="
@@ -41,16 +57,25 @@ parser$add_argument(
     help = "Directory for SLiM input files"
 )
 
+parser$add_argument(
+    "-n",
+    "--ncores",
+    default = 1,
+    type = "integer",
+    help = "Number of cores to use for parallel processing of runs"
+)
+
 args <- parser$parse_args()
 param_directory = args$parameter_directory # Directory containing CDMetaPOP parameter files
 output_overall = args$output_directory
+ncores <- min(max(args$ncores, 1L), parallel::detectCores())
 dir.create(file.path(output_overall), showWarnings = FALSE)
 
 ### Process RunVars ###
-runvars_all <- read_csv(args$runvars_file_name, show_col_types = FALSE) 
+runvars_all <- read_table(args$runvars_file_name) 
 nruns <- nrow(runvars_all)
 
-for(run in 1:nruns){
+process_run <- function(run, runvars_all, param_directory, output_overall, nruns) {
   print(glue('Processing run {run} of {nruns}'))
   # Slice run 1
   runvars <- runvars_all |> slice(run)
@@ -95,11 +120,11 @@ for(run in 1:nruns){
   
   ### Process PopVars ###
   # Read in CDMetaPOP popvars
-  popvars <- read_csv(paste0(param_directory, pull(runvars, Popvars)), show_col_types = FALSE) 
+  popvars <- read_table(paste0(param_directory, pull(runvars, Popvars))) 
   
   ## 1. Process patchvars ##
   # Read in CDMetaPOP patchvars
-  patchvars <- read_csv(paste0(param_directory, pull(popvars, xyfilename)), show_col_types = FALSE)
+  patchvars <- read_table(paste0(param_directory, pull(popvars, xyfilename)))
   # Output file for patchvars for slim
   patchvars_file_out <- paste0(output_directory, "PatchVars_slim.csv")
   # Convert patchID to be 0 indexed. This is necessary for SLiM
@@ -159,7 +184,7 @@ for(run in 1:nruns){
   
   ## 1. (b) Process classvars
   # CDMetaPOP classvars
-  classvars = read_csv(paste0(param_directory, pull(patchvars, `Class Vars`)[1]), show_col_types = FALSE)
+  classvars = read_table(paste0(param_directory, pull(patchvars, `Class Vars`)[1]))
   # Remove unused columns
   if(runvars$sizecontrol == 'Y'){
     classvars_used = c("Age class", "Body Size Mean (mm)", "Body Size Std (mm)", "Distribution",
@@ -184,7 +209,7 @@ for(run in 1:nruns){
   
   # Write to file
   classvars_out_file = paste0(output_directory, "classvars.csv")
-  write_csv(classvars_out, classvars_out_file)
+  write_table(classvars_out, classvars_out_file)
   
   # Update file in patchvars
   patchvars <- mutate(patchvars, classvars = classvars_out_file)
@@ -207,7 +232,7 @@ for(run in 1:nruns){
   }
   
   patchvars_out <- select(patchvars, all_of(patchvars_used))                    
-  write_csv(patchvars_out, patchvars_file_out)
+  write_table(patchvars_out, patchvars_file_out)
   
   # Update patchvars file name in popvars
   popvars <- popvars |> mutate(xyfilename = patchvars_file_out)
@@ -240,17 +265,32 @@ for(run in 1:nruns){
                                        stray_cdmat = new_file_name(cdmat_dir, stray_cdmat_old),
                                        disperse_cdmat = new_file_name(cdmat_dir, disperse_cdmat_old))
   # Copy matrices over
-  for(i in 1:length(climchangeyears)){
-    write_csv(read_csv(paste0(param_directory, popvars_new$mate_cdmat_old[i]), col_names = FALSE, show_col_types = FALSE),
-              popvars_new$mate_cdmat[i],col_names = FALSE, quote = "none")
-    write_csv(read_csv(paste0(param_directory, popvars_new$migrateout_cdmat_old[i]), col_names = FALSE, show_col_types = FALSE),
-              popvars_new$migrateout_cdmat[i],col_names = FALSE, quote = "none")
-    write_csv(read_csv(paste0(param_directory, popvars_new$migrateback_cdmat_old[i]), col_names = FALSE, show_col_types = FALSE),
-              popvars_new$migrateback_cdmat[i],col_names = FALSE, quote = "none")
-    write_csv(read_csv(paste0(param_directory, popvars_new$stray_cdmat_old[i]), col_names = FALSE, show_col_types = FALSE),
-              popvars_new$stray_cdmat[i],col_names = FALSE, quote = "none")
-    write_csv(read_csv(paste0(param_directory, popvars_new$disperse_cdmat_old[i]), col_names = FALSE, show_col_types = FALSE),
-              popvars_new$disperse_cdmat[i],col_names = FALSE, quote = "none")
+  for(i in seq_along(climchangeyears)) {
+    file.copy(
+      from = paste0(param_directory, popvars_new$mate_cdmat_old[i]),
+      to = popvars_new$mate_cdmat[i],
+      overwrite = TRUE
+    )
+    file.copy(
+      from = paste0(param_directory, popvars_new$migrateout_cdmat_old[i]),
+      to = popvars_new$migrateout_cdmat[i],
+      overwrite = TRUE
+    )
+    file.copy(
+      from = paste0(param_directory, popvars_new$migrateback_cdmat_old[i]),
+      to = popvars_new$migrateback_cdmat[i],
+      overwrite = TRUE
+    )
+    file.copy(
+      from = paste0(param_directory, popvars_new$stray_cdmat_old[i]),
+      to = popvars_new$stray_cdmat[i],
+      overwrite = TRUE
+    )
+    file.copy(
+      from = paste0(param_directory, popvars_new$disperse_cdmat_old[i]),
+      to = popvars_new$disperse_cdmat[i],
+      overwrite = TRUE
+    )
   }
   
   ## 3. Process remaining variables ##
@@ -309,9 +349,9 @@ for(run in 1:nruns){
   }
   # Genome file
   if(has_name(popvars, "genome")){
-    genome <- read_csv(paste0(param_directory, popvars$genome[1]), show_col_types = FALSE)
+    genome <- read_table(paste0(param_directory, popvars$genome[1]))
     genome_outfile <- paste0(output_directory, "genome.csv")
-    write_csv(genome, genome_outfile)
+    write_table(genome, genome_outfile)
     popvars_new$genome <- genome_outfile
     # Is this a QTL model with one trait?
     if(has_name(popvars, "qtl_pheno_eff")){
@@ -355,10 +395,23 @@ for(run in 1:nruns){
   }
   if(climate_change){popvars_used = c("year", popvars_used)}
   popvars_out <- select(popvars_new, all_of(popvars_used)) |> mutate(startGenes = as.numeric(startGenes) + 1)
-  write_csv(popvars_out, popvars_file_out)
+  write_table(popvars_out, popvars_file_out)
   # Output runvars
-  write_csv(runvars_out, paste0(output_directory, "RunVars_slim.csv"))
+  write_table(runvars_out, paste0(output_directory, "RunVars_slim.csv"))
   print(glue('Processing run {run} of {nruns} finished'))
+}
+
+if (ncores > 1) {
+  invisible(parallel::mclapply(seq_len(nruns), process_run,
+                              runvars_all = runvars_all,
+                              param_directory = param_directory,
+                              output_overall = output_overall,
+                              nruns = nruns,
+                              mc.cores = ncores))
+} else {
+  for (run in seq_len(nruns)) {
+    process_run(run, runvars_all, param_directory, output_overall, nruns)
+  }
 }
 
 

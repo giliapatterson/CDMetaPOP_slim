@@ -67,7 +67,8 @@ if not os.path.exists(slim_params):
     os.mkdir(slim_params)
     command = f"Rscript '{script_dir}/scripts/make_slim_params.R' --parameter_directory {datadir} \
             --runvars_file_name {fileans} \
-            --output_directory {slim_params}"
+            --output_directory {slim_params} \
+            --ncores {args.cores}"
     try:
         retcode = subprocess.call(command, shell=True)
         if retcode < 0:

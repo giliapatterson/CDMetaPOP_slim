@@ -13,3 +13,5 @@ dependencies:
     - r-argparse
     - r-duckdb
     - r-sf
+    - r-vroom
+    - r-glue
