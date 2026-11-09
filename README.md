@@ -192,7 +192,7 @@ $$\max\left[\frac{A(B_{\epsilon}, B_{T_{opt}})}{A(\epsilon, T_{opt})}, 1.0\right
 
 <img src="example_runs/evolution_of_tpc/tpc_constant_area.png" alt="Examples of thermal performance curve with area constant.">
 
-The thermal performance curve influences fitness in two steps: fecundity and mortality. Mortality takes place immediately after dispersal and before density-dependent and age-dependent survival. An individual's probability of survival is the value of their thermal performance curve at the temperature they are currently experiencing. This temperature is `GrowthTemperatureBack` in their current patch.
+The thermal performance curve influences migration, dispersal, and fitness. It influences migration and dispersal by scaling migration and dispersal probabilities, so that individuals with lower thermal performance are less likely to migrate or disperse. It influences fitness in two steps: fecundity and mortality. Mortality takes place immediately after dispersal and before density-dependent and age-dependent survival. An individual's probability of survival is the value of their thermal performance curve at the temperature they are currently experiencing. This temperature is `GrowthTemperatureBack` in their current patch. 
 
 <img src="example_runs/trout_genome/thermal_performance/penalty_tpc.png" alt="Examples of thermal performance curves with costs.">
 

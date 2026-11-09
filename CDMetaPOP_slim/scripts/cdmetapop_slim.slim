@@ -717,6 +717,10 @@ late(){
 	individuals = all_inds[all_ages >=0];
 	if(SIZECONTROL) age_classes = age_class(individuals, method = "size"); else age_classes = age_class(individuals, method = "age");
 	pmigrate_out = PATCHVARS.getValue("Migration Out Prob")[individuals.subpopulation.id]*CLASSVARS.getValue("Migration Out Prob")[age_classes];
+	if(QTL_TPC){
+		tpc_scale = thermal_performance(GrowthTemperatureBack[individuals.subpopulation.id], individuals.getValue('Topt'), individuals.getValue('epsilon'), asFloat(TOPT_COST), CONSTANT_AREA, asFloat(TOPT_BASELINE), asFloat(EPSILON_BASELINE));
+		pmigrate_out = pmigrate_out*tpc_scale;
+	}
 	migrators = individuals[runif(length(individuals)) < pmigrate_out];
 	destinations = sample_subpops(migrators, MIGRATIONOUT);
 	//print(sum(destinations.id == 3) + " individuals migrated to 3.");
@@ -807,6 +811,10 @@ late(){
 	natal_pops = individuals.getValue("natal");
 	emigrated_pops = individuals.subpopulation.id;
 	pmigrate_back = PATCHVARS.getValue("Migration Back Prob")[emigrated_pops]*sapply(seqAlong(individuals), "RETURNMATRIX[emigrated_pops[applyValue], natal_pops[applyValue]];")*CLASSVARS.getValue("Migration Back Prob")[age_classes];
+	if(QTL_TPC){
+		tpc_scale = thermal_performance(GrowthTemperatureOut[individuals.subpopulation.id], individuals.getValue('Topt'), individuals.getValue('epsilon'), asFloat(TOPT_COST), CONSTANT_AREA, asFloat(TOPT_BASELINE), asFloat(EPSILON_BASELINE));
+		pmigrate_back = pmigrate_back*tpc_scale;
+	}
 	does_migrate = runif(length(individuals)) < pmigrate_back;
 	// Migrate back and stray
 	migrators = individuals[does_migrate & !does_stray];
@@ -826,6 +834,10 @@ late(){
 	individuals = all_inds[all_ages >=0];
 	if (SIZECONTROL) age_classes = age_class(individuals, method = "size"); else age_classes = age_class(individuals, method = "age");
 	pdisperse = PATCHVARS.getValue("Dispersal Prob")[individuals.subpopulation.id]*CLASSVARS.getValue("Dispersal Prob")[age_classes];
+	if(QTL_TPC){
+		tpc_scale = thermal_performance(GrowthTemperatureBack[individuals.subpopulation.id], individuals.getValue('Topt'), individuals.getValue('epsilon'), asFloat(TOPT_COST), CONSTANT_AREA, asFloat(TOPT_BASELINE), asFloat(EPSILON_BASELINE));
+		pdisperse = pdisperse*tpc_scale;
+	}
 	dispersers = individuals[runif(length(individuals)) < pdisperse];
 	print(length(dispersers) + " individuals dispersed.");
 	destinations = sample_subpops(dispersers, DISPERSELOCAL);
