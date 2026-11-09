@@ -1075,10 +1075,11 @@ function (integer)num_eggs(object<Individual> ind){
 // Sample subpopulations according to a probability matrix
 function (object<Subpopulation>)sample_subpops(object<Individual> individuals, float prob_matrix){
 	sources = individuals.subpopulation;
-	destinations = integer(length(individuals));
+	// Default destination is the current patch, so individuals with no possible destinations stay put
+	destinations = sources.id;
 	for (i in seqAlong(sources)){
 		newpop_weights = prob_matrix[sources[i].id,];
-		// If no patches to migrate to, skip
+		// If no patches to migrate to, stay in current patch
 		if(sum(newpop_weights) == 0) next;
 		new_destination = sample(PATCHIDS, size = 1, replace = T, weights = newpop_weights);
 		destinations[i] = new_destination;
