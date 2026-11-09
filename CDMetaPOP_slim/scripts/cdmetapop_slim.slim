@@ -632,8 +632,8 @@ reproduction(NULL, "F") {
 	}
 }
 
-// Mutation
-modifyChild(p1) {
+// Mutation (applies to offspring in every patch)
+modifyChild() {
 	for (genome in child.haplosomes){
 		if(MUTRATE * NLOCI > 0) mutCount = rpois(1, MUTRATE * NLOCI);
 		else mutCount = 0;
