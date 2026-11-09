@@ -233,7 +233,7 @@ first(){
 			}
 		}
 		individuals = sim.subpopulations.individuals;
-		phenotypes = individuals.sumOfMutationsOfType(m2) + sum(sim.substitutionsOfType(m2).selectionCoeff) + rnorm(length(individuals), mean = 0, sd = sqrt(QTL_VE)) + QTL_BASELINE;
+		phenotypes = individuals.sumOfMutationsOfType(m2) + 2*sum(sim.substitutionsOfType(m2).selectionCoeff) + rnorm(length(individuals), mean = 0, sd = sqrt(QTL_VE)) + QTL_BASELINE;
 		individuals.setValuesVectorized("phenotype", phenotypes);
 	}
 }
@@ -424,7 +424,7 @@ reproduction(NULL, "F") {
 				offspring.tagL1 = F;
 				// QTL
 				if(QTL){
-					phenotypes = offspring.sumOfMutationsOfType(m2) + sum(sim.substitutionsOfType(m2).selectionCoeff) + rnorm(length(offspring), mean = 0, sd = sqrt(QTL_VE)) + QTL_BASELINE;
+					phenotypes = offspring.sumOfMutationsOfType(m2) + 2*sum(sim.substitutionsOfType(m2).selectionCoeff) + rnorm(length(offspring), mean = 0, sd = sqrt(QTL_VE)) + QTL_BASELINE;
 					offspring.setValuesVectorized("phenotype", phenotypes);
 				}
 			}
