@@ -411,12 +411,12 @@ first(){
 		}
 		individuals = sim.subpopulations.individuals;
 		if(!QTL_TPC){
-			phenotypes = individuals.sumOfMutationsOfType(m2) + sum(sim.substitutionsOfType(m2).selectionCoeff) + rnorm(length(individuals), mean = 0, sd = sqrt(QTL_VE)) + QTL_BASELINE;
+			phenotypes = individuals.sumOfMutationsOfType(m2) + 2*sum(sim.substitutionsOfType(m2).selectionCoeff) + rnorm(length(individuals), mean = 0, sd = sqrt(QTL_VE)) + QTL_BASELINE;
 			individuals.setValuesVectorized("phenotype", phenotypes);
 		}
 		if(QTL_TPC){
-			Topts = individuals.sumOfMutationsOfType(m2) + sum(sim.substitutionsOfType(m2).selectionCoeff) + rnorm(length(individuals), mean = 0, sd = sqrt(TOPT_VE)) + TOPT_BASELINE;
-			epsilons = individuals.sumOfMutationsOfType(m4) + sum(sim.substitutionsOfType(m4).selectionCoeff) + rnorm(length(individuals), mean = 0, sd = sqrt(EPSILON_VE)) + 	EPSILON_BASELINE;
+			Topts = individuals.sumOfMutationsOfType(m2) + 2*sum(sim.substitutionsOfType(m2).selectionCoeff) + rnorm(length(individuals), mean = 0, sd = sqrt(TOPT_VE)) + TOPT_BASELINE;
+			epsilons = individuals.sumOfMutationsOfType(m4) + 2*sum(sim.substitutionsOfType(m4).selectionCoeff) + rnorm(length(individuals), mean = 0, sd = sqrt(EPSILON_VE)) + 	EPSILON_BASELINE;
 			individuals.setValuesVectorized("Topt", Topts);
 			individuals.setValuesVectorized("epsilon", pmax(0.001, epsilons));
 		}
@@ -618,12 +618,12 @@ reproduction(NULL, "F") {
 				offspring.tagL1 = F;
 				// QTL
 				if(QTL & !QTL_TPC){
-					phenotypes = offspring.sumOfMutationsOfType(m2) + sum(sim.substitutionsOfType(m2).selectionCoeff) + rnorm(length(offspring), mean = 0, sd = sqrt(QTL_VE)) + QTL_BASELINE;
+					phenotypes = offspring.sumOfMutationsOfType(m2) + 2*sum(sim.substitutionsOfType(m2).selectionCoeff) + rnorm(length(offspring), mean = 0, sd = sqrt(QTL_VE)) + QTL_BASELINE;
 					offspring.setValuesVectorized("phenotype", phenotypes);
 				}
 				if(QTL & QTL_TPC){
-					Topts = offspring.sumOfMutationsOfType(m2) + sum(sim.substitutionsOfType(m2).selectionCoeff) + rnorm(length(offspring), mean = 0, sd = sqrt(TOPT_VE)) + TOPT_BASELINE;
-					epsilons = offspring.sumOfMutationsOfType(m4) + sum(sim.substitutionsOfType(m4).selectionCoeff) + rnorm(length(offspring), mean = 0, sd = sqrt(EPSILON_VE)) + EPSILON_BASELINE;
+					Topts = offspring.sumOfMutationsOfType(m2) + 2*sum(sim.substitutionsOfType(m2).selectionCoeff) + rnorm(length(offspring), mean = 0, sd = sqrt(TOPT_VE)) + TOPT_BASELINE;
+					epsilons = offspring.sumOfMutationsOfType(m4) + 2*sum(sim.substitutionsOfType(m4).selectionCoeff) + rnorm(length(offspring), mean = 0, sd = sqrt(EPSILON_VE)) + EPSILON_BASELINE;
 					offspring.setValuesVectorized("Topt", Topts);
 					offspring.setValuesVectorized("epsilon", pmax(0.001, epsilons));
 				}
@@ -1723,7 +1723,7 @@ function (float) calcAdditiveOriginIndividual(io<Individual> individual, integer
 	origin_muts = all_muts[all_muts.subpopID == origin_subpop_id];
 	all_subs = sim.substitutionsOfType(mutType);
 	origin_subs = all_subs[all_subs.subpopID == origin_subpop_id];
-	sum_of_muts  = sum(c(origin_muts.selectionCoeff, origin_subs.selectionCoeff));
+	sum_of_muts = sum(origin_muts.selectionCoeff) + 2*sum(origin_subs.selectionCoeff); // substitutions are homozygous in every individual
 	return(sum_of_muts);
 }
 
