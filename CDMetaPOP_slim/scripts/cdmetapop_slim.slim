@@ -233,7 +233,7 @@ first(){
 			}
 		}
 		individuals = sim.subpopulations.individuals;
-		phenotypes = individuals.sumOfMutationsOfType(m2) + sum(sim.substitutionsOfType(m2).selectionCoeff) + rnorm(length(individuals), mean = 0, sd = sqrt(QTL_VE)) + QTL_BASELINE;
+		phenotypes = individuals.sumOfMutationsOfType(m2) + 2*sum(sim.substitutionsOfType(m2).selectionCoeff) + rnorm(length(individuals), mean = 0, sd = sqrt(QTL_VE)) + QTL_BASELINE;
 		individuals.setValuesVectorized("phenotype", phenotypes);
 	}
 }
@@ -256,14 +256,15 @@ STARTGENES first(){
 				alleles_per_locus = integer(length(all_loci));
 				// Keep track of alleles for each locus
 				alleles_per_locus_vals = Dictionary();
-				for (locus_index in all_loci){
+				for (locus_index in seqAlong(all_loci)){
 					locus = all_loci[locus_index];
 					// Get alleles for the locus
 					locus_df = gene_freqs.subsetRows(gene_freqs.getValue('position') == locus);
 					freqs = locus_df.getValue('Frequency');
 					alleles = locus_df.getValue('allele');
 					alleles_per_locus[locus_index] = length(alleles);
-					alleles_per_locus_vals.setValue(locus_index, alleles);
+					// Keyed by position, because modifyChild() looks alleles up by mutation position
+					alleles_per_locus_vals.setValue(locus, alleles);
 					// Select alleles for each genome
 					genome_alleles = sample(alleles, ngenomes, replace = T, weights = freqs);
 					// assign alleles counts to genomes
@@ -424,7 +425,7 @@ reproduction(NULL, "F") {
 				offspring.tagL1 = F;
 				// QTL
 				if(QTL){
-					phenotypes = offspring.sumOfMutationsOfType(m2) + sum(sim.substitutionsOfType(m2).selectionCoeff) + rnorm(length(offspring), mean = 0, sd = sqrt(QTL_VE)) + QTL_BASELINE;
+					phenotypes = offspring.sumOfMutationsOfType(m2) + 2*sum(sim.substitutionsOfType(m2).selectionCoeff) + rnorm(length(offspring), mean = 0, sd = sqrt(QTL_VE)) + QTL_BASELINE;
 					offspring.setValuesVectorized("phenotype", phenotypes);
 				}
 			}
@@ -432,8 +433,8 @@ reproduction(NULL, "F") {
 	}
 }
 
-// Mutation
-modifyChild(p1) {
+// Mutation (applies to offspring in every patch)
+modifyChild() {
 	for (genome in child.haplosomes){
 		if(MUTRATE * NLOCI > 0) mutCount = rpois(1, MUTRATE * NLOCI);
 		else mutCount = 0;
@@ -811,10 +812,11 @@ function (integer)num_eggs(object<Individual> ind){
 // Sample subpopulations according to a probability matrix
 function (object<Subpopulation>)sample_subpops(object<Individual> individuals, float prob_matrix){
 	sources = individuals.subpopulation;
-	destinations = integer(length(individuals));
+	// Default destination is the current patch, so individuals with no possible destinations stay put
+	destinations = sources.id;
 	for (i in seqAlong(sources)){
 		newpop_weights = prob_matrix[sources[i].id,];
-		// If no patches to migrate to, skip
+		// If no patches to migrate to, stay in current patch
 		if(sum(newpop_weights) == 0) next;
 		new_destination = sample(PATCHIDS, size = 1, replace = T, weights = newpop_weights);
 		destinations[i] = new_destination;
