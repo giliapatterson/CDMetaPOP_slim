@@ -1721,7 +1721,8 @@ function (void) writeQTLOutputSubpops(string outfile, logical header, logical qt
 function (float) calcAdditiveOriginIndividual(io<Individual> individual, integer origin_subpop_id, io<MutationType>$ mutType){
 	all_muts = c(individual.haplosomes.mutationsOfType(mutType));
 	origin_muts = all_muts[all_muts.subpopID == origin_subpop_id];
-	origin_subs = sim.substitutionsOfType(m4)[sim.substitutionsOfType(m4).subpopID == 0];
+	all_subs = sim.substitutionsOfType(mutType);
+	origin_subs = all_subs[all_subs.subpopID == origin_subpop_id];
 	sum_of_muts  = sum(c(origin_muts.selectionCoeff, origin_subs.selectionCoeff));
 	return(sum_of_muts);
 }
