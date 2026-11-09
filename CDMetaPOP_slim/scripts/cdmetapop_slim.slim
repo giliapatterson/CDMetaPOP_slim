@@ -441,14 +441,15 @@ STARTGENES first(){
 				alleles_per_locus = integer(length(all_loci));
 				// Keep track of alleles for each locus
 				alleles_per_locus_vals = Dictionary();
-				for (locus_index in all_loci){
+				for (locus_index in seqAlong(all_loci)){
 					locus = all_loci[locus_index];
 					// Get alleles for the locus
 					locus_df = gene_freqs.subsetRows(gene_freqs.getValue('position') == locus);
 					freqs = locus_df.getValue('Frequency');
 					alleles = locus_df.getValue('allele');
 					alleles_per_locus[locus_index] = length(alleles);
-					alleles_per_locus_vals.setValue(locus_index, alleles);
+					// Keyed by position, because modifyChild() looks alleles up by mutation position
+					alleles_per_locus_vals.setValue(locus, alleles);
 					// Select alleles for each genome
 					genome_alleles = sample(alleles, ngenomes, replace = T, weights = freqs);
 					// assign alleles counts to genomes
