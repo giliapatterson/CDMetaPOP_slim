@@ -247,7 +247,8 @@ initialize() {
 			initializeChromosome(id, length, type = "A", symbol = "c" + id);
 			neutral_start = 0;
 			if(nqtls > 0) neutral_end = qtl_starts[0] - 1; else neutral_end = length - 1;
-			if(neutral_end > 0){
+			// >= so that a 1 bp neutral region (start == end) is still added
+			if(neutral_end >= neutral_start){
 				initializeGenomicElement(g3, start = asInteger(neutral_start), end = asInteger(neutral_end));
 				region_ends = c(region_ends, asInteger(neutral_end));
 				mutation_rates = c(mutation_rates, 0.0);
@@ -262,7 +263,7 @@ initialize() {
 					region_ends = c(region_ends, asInteger(start_pos + QTL_REGION_LENGTH - 1));
 					mutation_rates = c(mutation_rates, mr);
 					is_qtl = c(is_qtl, T);
-					if(neutral_end > neutral_start){
+					if(neutral_end >= neutral_start){
 						initializeGenomicElement(g3, start = asInteger(neutral_start), end = asInteger(neutral_end));
 						region_ends = c(region_ends, asInteger(neutral_end));
 						mutation_rates = c(mutation_rates, 0.0);
