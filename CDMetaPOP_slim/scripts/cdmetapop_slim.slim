@@ -1221,10 +1221,10 @@ function (float)thermal_performance(float temperature, float Topt, float epsilon
 // Packing
 function (integer)packing_survivors(object<Subpopulation> pack_subpop, string age_class_method){
 	Nj = pack_subpop.individualCount; // Current N
-	if(Nj == 0){
+	Kj = PATCHKS[pack_subpop.id]; // Total carrying capacity for the patch
+	if(Nj == 0 | Kj <= 0){
 		return(integer(length(CLASSVARS.getValue("Age class"))));
 	}
-	Kj = PATCHKS[pack_subpop.id]; // Total carrying capacity for the patch
 	if (Kj == Nj) R0j = 1; else R0j = (log(Kj/Nj))/(1-Nj/Kj); // Adjusted R0
 	is = CLASSVARS.getValue("Age class"); // Age classes and indices of age classes
 	ind_age_classes = age_class(pack_subpop.individuals, method = age_class_method); // Age classes of every individual in the population
@@ -1245,7 +1245,7 @@ function (integer)packing_survivors(object<Subpopulation> pack_subpop, string ag
 		Kage_hab_adj_inc = Kage_hab_adj_inc + (Kage_hab_adj/classcount);
 		// Adjust the Kage_hab
 		Kage_hab = Kage_hab + Kage_hab_adj_inc;
-  		Kage = Nji[i]*exp(R0ji[i]*(1-(Nji[i]/(Kj*Kage_hab))));
+  		if (Nji[i] == 0) Kage = 0.0; else Kage = Nji[i]*exp(R0ji[i]*(1-(Nji[i]/(Kj*Kage_hab))));
   		Kused = min(asFloat(Nji[i]), Kage);
   		nsurvive[i] = Kused;
 		if (Kage == 0) Kage_hab_adj = Kage_hab;
