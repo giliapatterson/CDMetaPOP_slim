@@ -144,7 +144,11 @@ initialize() {
 		defineConstant("OUTPUT_TICKS", rev(seq(RUNTIME, 1, by = -output_split)));
 	}
 	//Output ticks and focal subpopulations for origin of mutations
-	if(!isNULL(RUNVARS.getValue('mutation_output_years'))){
+	// Both are optional: MUTATION_OUTPUT is T if mutation_output_years is given,
+	// MUTATION_ORIGIN is T if mutation_origin_year is also given
+	defineConstant("MUTATION_OUTPUT", !isNULL(RUNVARS.getValue('mutation_output_years')));
+	defineConstant("MUTATION_ORIGIN", MUTATION_OUTPUT & !isNULL(RUNVARS.getValue('mutation_origin_year')));
+	if(MUTATION_OUTPUT){
 		output_split = asInteger(strsplit(asString(RUNVARS.getValue("mutation_output_years")), "|"));
 		defineConstant("MUTATION_OUTPUT_TICKS", output_split);
 		output_split = asInteger(strsplit(asString(RUNVARS.getValue("mutation_output_subpops")), "|"));
@@ -154,12 +158,14 @@ initialize() {
 			focal_subpops = sample(0:(NPATCHES-1), size = nfocal_subpops);
 			defineConstant("MUTATION_OUTPUT_SUBPOP_IDS", focal_subpops);
 		}
-		defineConstant('MUTATION_ORIGIN_TICK', asInteger(RUNVARS.getValue('mutation_origin_year')));
+		if(MUTATION_ORIGIN) defineConstant('MUTATION_ORIGIN_TICK', asInteger(RUNVARS.getValue('mutation_origin_year'))[0]);
 		writeMutationalOrigins(MUTATION_OUTPUT_FILE, T, MUTATION_OUTPUT_SUBPOP_IDS);
 		writeMutationEffects(MUTATION_EFFECTS_OUTPUT_FILE, T);
 	}
-	// Placeholder
-	if(isNULL(RUNVARS.getValue('mutation_output_years'))) defineConstant("MUTATION_OUTPUT_TICKS", 1);
+	// Placeholders so the MUTATION_OUTPUT_TICKS and MUTATION_ORIGIN_TICK blocks can be scheduled;
+	// the blocks check MUTATION_OUTPUT / MUTATION_ORIGIN and do nothing when these are placeholders
+	if(!MUTATION_OUTPUT) defineConstant("MUTATION_OUTPUT_TICKS", 1);
+	if(!MUTATION_ORIGIN) defineConstant("MUTATION_ORIGIN_TICK", 1);
 	// Read in popvars for every year
 	defineConstant("POPVARS_ALL", readCSV(PARAM_FOLDER + RUNVARS.getValue("Popvars")[0]));
 	// Is a QTL implemented, and is genome length specified or is a genome file specified?
@@ -954,7 +960,7 @@ late(){
 }
 
 MUTATION_ORIGIN_TICK late(){
-	if(QTL_TPC){
+	if(QTL_TPC & MUTATION_ORIGIN){
 		if(length(sim.mutations) > 0){
 			counts = matrix(sapply(sim.subpopulations, "sim.mutationCounts(applyValue, sim.mutations);"), nrow = length(sim.mutations));
 			freqs = apply(counts, 0, 'applyValue/sum(applyValue);');
@@ -967,7 +973,7 @@ MUTATION_ORIGIN_TICK late(){
 }
 
 MUTATION_OUTPUT_TICKS late(){
-	if(QTL_TPC){
+	if(QTL_TPC & MUTATION_OUTPUT){
 		print("Writing origin of mutations");
 		writeMutationalOrigins(MUTATION_OUTPUT_FILE, F, MUTATION_OUTPUT_SUBPOP_IDS);
 		print("Writing mutation effects");
@@ -1738,7 +1744,8 @@ function (float) calcAdditiveContributionOrigin(integer focal_subpop_id, integer
 function (string) mutationalOrigins(string header_string, integer focal_subpop_id){
 	focal_subpop = sim.subpopulations[focal_subpop_id];
 	if(focal_subpop.individualCount > 0 & length(focal_subpop.individuals.haplosomes.mutations) > 0){
-		if(community.tick > MUTATION_ORIGIN_TICK){
+		// Origin-tick frequencies only exist if mutation_origin_year was given; otherwise those columns are NA
+		if(MUTATION_ORIGIN & community.tick > MUTATION_ORIGIN_TICK){
 			all_mutations = unique(focal_subpop.haplosomes.mutationsOfType(m2));
 			focal_mutations = all_mutations[all_mutations.originTick <= MUTATION_ORIGIN_TICK];
 			new_mutations = all_mutations[all_mutations.originTick > MUTATION_ORIGIN_TICK];
