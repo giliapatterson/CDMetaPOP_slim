@@ -83,7 +83,7 @@ and the heritability of the trait is $V_A/(V_E + V_A)$. This model does not incl
 
 The default behavior is for the simulation to be initialized with no genetic variation and with a genome of length `genome_length`. At this point all individuals have the same phenotype, $B$. The user specifies the proportion of the genome where mutations that arise will affect the phenotype, `qtl_prop_genome`, as well as a mutation rate, `qtl_muterate`. When a new mutation arises in the quantitative trait portion of the genome, its phenotypic effect is drawn from the distribution of phenotypic effects specified by the user, `qtl_pheno_eff`. For example, if `qtl_pheno_eff = rnorm(1, 0, 5.0)`, then the phenotypic effect is drawn from a normal distribution with mean 0 and standard deviation 5.0. Mutations that arise in the remaining portion of the genome are neutral. The user also specifies a recombination rate for the genome, `qtl_recrate`. `qtl_muterate` and `qtl_recrate` can change over time, but `genome_length`, `qtl_prop_genome`, and `qtl_pheno_eff` cannot. 
 
-Selection on the trait takes place immediately after dispersal, before the "Packing back" step. Selection takes place through excess mortality. The probability an individual dies in the selection step is determined by the deviation of its phenotype from the environment it experiences. The user specifies which environmental variable the phenotype is linked to in `qtl_env_variable`. `qtl_env_variable` must be the name of a column in the PatchVars file. The probability an individual dies is:
+Selection on the trait takes place after the "Packing back" and age-dependent mortaility steps. Selection takes place through excess mortality. The probability an individual dies in the selection step is determined by the deviation of its phenotype from the environment it experiences. The user specifies which environmental variable the phenotype is linked to in `qtl_env_variable`. `qtl_env_variable` must be the name of a column in the PatchVars file. The probability an individual survives is:
 $$f((P_j-\text{environment experienced}))/f(0)$$
 where $f$ is the PDF of a normal distribution with mean 0 and standard deviation $\sigma = $ `qtl_fit_sd`,
 
@@ -150,7 +150,7 @@ If the quantitative trait model is used, CDMetaPOP_slim will output two addition
 
 `Ve`: Environmental variance.
 
-`heritability`: Equal to $V_A/(V_A + V_E)$.
+`heritability`: Equal to $V_A/V_P$, where $V_P$ is the total phenotypic variance and both $V_A$ and $V_P$ are calculated for each tick's newborn's before selection.
 
 `qtl_alleles`: Number of alleles that influence the quantitative trait.
 
@@ -168,7 +168,7 @@ If the quantitative trait model is used, CDMetaPOP_slim will output two addition
 
 CDMetaPOP Version 3S includes support for modeling thermal performance curves as quantitative traits. The model is based on the universal thermal performance curve [[1](https://doi.org/10.1073/pnas.2513099122)]. The curve is specified by two parameters, $T_{opt}$ and $\epsilon$ and takes the form
 $$P = \max(e^{x}(1-x), 0)$$
-where $x = (t-T_{opt})/\epsilon$. $T_{opt}$ is the temperature in degrees Celsius at which an organism has an optimal performance of 1.0. As temperature increases, performance decreases to 0 at $CT_{max} = T_{opt} + \epsilon$. $\epsilon$ is known as the "thermal safety margin" [[2](ttps://doi.org/10.1111/ele.12686)].
+where $x = (t-T_{opt})/\epsilon$. $T_{opt}$ is the temperature in degrees Celsius at which an organism has an optimal performance of 1.0. As temperature increases, performance decreases to 0 at $CT_{max} = T_{opt} + \epsilon$. $\epsilon$ is known as the "thermal safety margin" [[2](https://doi.org/10.1111/ele.12686)].
 
 <img src="example_runs/trout_genome/thermal_performance/tpc.png" alt="An example of a thermal performance curve. The optimal thermal performance is 1.0 at T opt equals 10 degrees celsius. Performance sharply declines to 0 as temperature increases, with performance of 0 at T opt plus epsilon equals 17 degrees celsius">
 
@@ -192,11 +192,11 @@ $$\max\left[\frac{A(B_{\epsilon}, B_{T_{opt}})}{A(\epsilon, T_{opt})}, 1.0\right
 
 <img src="example_runs/evolution_of_tpc/tpc_constant_area.png" alt="Examples of thermal performance curve with area constant.">
 
-The thermal performance curve influences migration, dispersal, and fitness. It influences migration and dispersal by scaling migration and dispersal probabilities, so that individuals with lower thermal performance are less likely to migrate or disperse. It influences fitness in two steps: fecundity and mortality. Mortality takes place immediately after dispersal and before density-dependent and age-dependent survival. An individual's probability of survival is the value of their thermal performance curve at the temperature they are currently experiencing. This temperature is `GrowthTemperatureBack` in their current patch. 
+The thermal performance curve influences migration, dispersal, and fitness. It influences migration and dispersal by scaling migration and dispersal probabilities, so that individuals with lower thermal performance are less likely to migrate or disperse. It influences fitness in two steps: fecundity and mortality. Mortality takes place immediately after density-dependent and age-dependent survival. An individual's probability of survival is the value of their thermal performance curve at the temperature they are currently experiencing. This temperature is `GrowthTemperatureBack` in their current patch. 
 
 <img src="example_runs/trout_genome/thermal_performance/penalty_tpc.png" alt="Examples of thermal performance curves with costs.">
 
-For fecundity, the number of eggs produced by a female is multiplied by the value of her thermal performance curve at the temperature she is experiencing when she reproduces (`GrowthTemperatureBack` in here current patch.) In some CDMetaPOP models, fecundity is influenced by temperature through differences in growth rates at different temperatures (`sizecontrol = 'Y'`). This means that there are three options for modeling the effect of temperature on fecundity. The first is "Environmental only", when the thermal performance curve model is not operating and `sizecontrol = 'Y'`. In this model an individual's fecundity will depend only on the temperature in their patch, with no influence of genetics. The second is "Genetic only", when the thermal performance curve model is operating and `sizecontrol = 'N'`. In this model an individual's fecundity will depend on the interaction between genetics and environment throught $T_{opt}$ and $\epsilon$, but there is no independent effect of environment. The final is "Environmental and genetic", where an individual's fecundity depends both on the interaction between genetics and environment and on the independent effect of environment. Examples of these models are shown below.
+For fecundity, the number of eggs produced by a female is multiplied by the value of her thermal performance curve at the temperature she is experiencing when she reproduces (`GrowthTemperatureBack` in the current patch.) In some CDMetaPOP models, fecundity is influenced by temperature through differences in growth rates at different temperatures (`sizecontrol = 'Y'`). This means that there are three options for modeling the effect of temperature on fecundity. The first is "Environmental only", when the thermal performance curve model is not operating and `sizecontrol = 'Y'`. In this model an individual's fecundity will depend only on the temperature in their patch, with no influence of genetics. The second is "Genetic only", when the thermal performance curve model is operating and `sizecontrol = 'N'`. In this model an individual's fecundity will depend on the interaction between genetics and environment throught $T_{opt}$ and $\epsilon$, but there is no independent effect of environment. The final is "Environmental and genetic", where an individual's fecundity depends both on the interaction between genetics and environment and on the independent effect of environment. Examples of these models are shown below.
 
 <img src="example_runs/trout_genome/thermal_performance/fecundity_tpc.png" alt="Examples of fecundity curves.">
 
@@ -208,11 +208,11 @@ In PopVars:
 
 `genome`: Path to file containing information on the genome. This file contains four columns: `Chromosome`, `Length`, `recombination_rate`, and `mutation_rate`. These parameters cannot change over time.
 
-`qtl_regions`: Number of QTL regions in the genome. If the number specified cannot fit in the genome, the number of QTL regions will be reduced.
+`qtl_regions`: Number of QTL regions in the genome. If the number specified cannot fit in the genome, the number of QTL regions will be reduced. Chromosomes shorter than `qtl_region_length` are not assigned any QTL regions.
 
 `qtl_region_length`: Length in base pairs of each QTL region. Cannot change over time.
 
-`qtl_prop_region`: The proportion of QTL regions where new mutations influence phenotype. In the remainder of the genome, mutations are neutral. Half of the non-neutral sites influence $T_{opt}$ and half influence $\epsilon$. Can change over time.
+`qtl_prop_region`: The proportion of sites within each QTL region where new mutations influence phenotype. In the remainder of the genome, mutations are neutral. Half of the non-neutral sites influence $T_{opt}$ and half influence $\epsilon$. Can change over time.
 
 `qtl_mutations_initial`: Number of mutations influencing $T_{opt}$ and $\epsilon$ to be added to each QTL region in the first generation.
 
@@ -220,9 +220,9 @@ In PopVars:
 
 `epsilon_pheno_eff`: A piece of code for drawing the effect of a new mutation on $\epsilon$. Cannot change over time.
 
-`Topt_ve`: V_E for $T_{opt}$. Cannot change over time.
+`Topt_VE`: V_E for $T_{opt}$. Cannot change over time.
 
-`epsilon_ve`: V_E for $\epsilon$. Cannot change over time.
+`epsilon_VE`: V_E for $\epsilon$. Cannot change over time.
 
 `Topt_baseline`: Value of $T_{opt}$ when no mutations influencing $T_{opt}$ are present. Cannot change over time.
 
@@ -258,11 +258,11 @@ CDMetaPOP_slim will also output an additional file, `mutation_origins.csv `, tha
 
 `origin_subpop`: Source patch
 
-`Topt_count`: Number of mutations in the focal patch influencing $T_{opt}$ that originated in the source patch.
+`Topt_count`: Number of copies of mutations in the focal patch influencing $T_{opt}$ that originated in the source patch.
 
-`epsilon_count`: Number of mutations in the focal patch influencing $\epsilon$ that originated in the source patch.
+`epsilon_count`: Number of copies of mutations in the focal patch influencing $\epsilon$ that originated in the source patch.
 
-`neutral_count`: Number of neutral mutations in the focal patch that originated in the source patch.
+`neutral_count`: Number of copies of mutations in the focal patch that originated in the source patch.
 
 `Topt_mean_contribution`: Mean contribution to $T_{opt}$ of mutations in the focal patch that originated in the source patch.
 
@@ -322,7 +322,7 @@ This example runs the same model of evolution of thermal tolerance as the climat
 To run the script, navigate to the `example_runs/trout_genome` directory and run:
 
 ```
-python ../../CDMetaPOP_slim/CDmetaPOP_slim.py -c8 -d climate_change_McKenzie -i RunVars.csv -o slim_output --no-filetime -s 300
+python ../../CDMetaPOP_slim/CDMetaPOP_slim.py -c8 -d climate_change_McKenzie -i RunVars.csv -o slim_output --no-filetime -s 300
 ```
 
 1. Flores A-M, Christensen KA, Godin T, Palti Y, Campbell MR, Waldbieser GC, et al. The genome assembly of the westslope cutthroat trout, Oncorhynchus lewisi , reveals interspecific chromosomal rearrangements with the rainbow trout, Oncorhynchus mykiss. G3: Genes, Genomes, Genetics. 2025;15:jkaf064. https://doi.org/10.1093/g3journal/jkaf064.
