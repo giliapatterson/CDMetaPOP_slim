@@ -1072,52 +1072,6 @@ function (object <Dictionary>)carrying_capacity_mortality(void){
 	return(Dictionary("nkilled_subpops", nkilled, "nkilled_ages", nkilled_age));
 }
 
-function (string)age_distribution(object<Subpopulation> subpop, string method){
-	if(subpop.individualCount == 0) return(NULL);
-	// Calculate age distribution within the subpopulation subpop
-	// And return a string for printing to file
-	individuals = subpop.individuals;
-	age_classes = age_class(individuals, method);
-	// store information for output
-	out_string = string(length(age_classes));
-	for (age_class in CLASSVARS.getValue("Age class"))
-	{
-		individual_count = sum(age_classes == age_class);
-		proportion = individual_count/subpop.individualCount;
-		out_string[age_class] = paste0(community.tick, ",", subpop.id, ",", age_class, ",", individual_count, ",",proportion, "\n");
-	}
-	return(paste0(out_string));
-}
-
-
-function (string)msat_freqs(object<Subpopulation> subpop){
-	// Calculate allele frequencies within the subpopulation subpop
-	// And return a string for printing to file
-	if(length(community.allMutationTypes) == 1){
-		all_alleles = unique(subpop.individuals.haplosomes.mutationsOfType(m1));
-		positions = seq(0, NLOCI - 1, 1);
-		// store information for output
-		out_string = string(length(all_alleles));
-		i = 0;
-		for (pos in sort(positions))
-		{
-			allelesAtPos = all_alleles[all_alleles.position == pos];
-			for (allele in sortBy(allelesAtPos, "tag")){
-				allele_freq = sim.mutationFrequencies(subpop, allele);
-				out_string[i] = paste0(community.tick, ",", subpop.id, ",", pos, ",", allele.tag, ",",allele_freq, "\n");
-				i = i+1;
-			}
-		}
-	}
-	if(length(community.allMutationTypes) == 0){
-		out_string = paste0(community.tick, ",", subpop.id, ",", "NA", ",", "NA", ",","NA", "\n");
-	}
-	if(length(community.allMutationTypes) > 1){
-		print("Error: function for calculating allele frequencies doesn't yet handle more than one mutation type.");
-		out_string = paste0(community.tick, ",", subpop.id, ",", "NA", ",", "NA", ",","NA", "\n");
-	}
-	return(paste0(out_string));
-}
 
 function (void)setupParams(object<Dictionary>$ defaults)
 {
