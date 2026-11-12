@@ -596,6 +596,8 @@ late(){
 	natal_pops = individuals.getValue("natal");
 	emigrated_pops = individuals.subpopulation.id;
 	pmigrate_back = PATCHVARS.getValue("Migration Back Prob")[emigrated_pops]*sapply(seqAlong(individuals), "RETURNMATRIX[emigrated_pops[applyValue], natal_pops[applyValue]];")*CLASSVARS.getValue("Migration Back Prob")[age_classes];
+	// Can't return to a natal patch whose carrying capacity is 0 this year (as in CDMetaPOP)
+	pmigrate_back = pmigrate_back * asFloat(PATCHKS[natal_pops] > 0);
 	does_migrate = runif(length(individuals)) < pmigrate_back;
 	// Migrate back and stray
 	migrators = individuals[does_migrate & !does_stray];
@@ -1170,25 +1172,23 @@ function (void)setupGlobalsFromPopVars(object<Dictionary>$ popvars){
 	if (NPATCHES != "all"){stray_matrix = stray_matrix[PATCHIDS,PATCHIDS];}
 	defineGlobal("STRAYMATRIX", asFloat(stray_matrix));
 	
-	// Migration back matrix
-	migration_matrix = readCSV(safe_path(PARAM_FOLDER, popvars.getValue('migrateback_cdmat')), colNames = asString(PATCHIDS)).asMatrix();
-	migration_matrix[,ngrounds == 0] = 0; // Can't migrate back to non-natal grounds
-	if (NPATCHES != "all"){migration_matrix = migration_matrix[PATCHIDS,PATCHIDS];}
-	defineGlobal("MIGRATIONBACK", asFloat(migration_matrix));
+	// Migration back matrix (only used for the probability of returning to the natal patch, below)
+	back_matrix = asFloat(readCSV(safe_path(PARAM_FOLDER, popvars.getValue('migrateback_cdmat')), colNames = asString(PATCHIDS)).asMatrix());
 	
-	// Probability of migrating back to natal patch from each other patch
-	// Natal to emigrated: MIGRATIONOUT, natal patch is row, emigrated patch is column
-	// Emigrated to Natal : MIGRATIONBACK, emigrated patch is row, natal patch is column
-	// We want a matrix with emigrated patch as row, natal patch as column, and each entry the
-	// probability of returning to the natal patch from the emigrated patch
-	return_matrix = matrix(rep(0.0, asInteger(nrow(MIGRATIONBACK)^2)), nrow = nrow(MIGRATIONBACK));
-	// If MigrateBack[Emigrated Patch, Natal Patch] = 0.0, then entry is 0
-	return_matrix[MIGRATIONBACK == 0] = 0;
-	// If MigrateBack[Emigrated Patch, Natal Patch] = MigrateOut[Natal Patch, Emigrated Patch], entry is 1
-	return_matrix[MIGRATIONBACK == t(MIGRATIONOUT)] = 1.0;
-	// If MigrateBack[Emigrated Patch, Natal Patch] < MigrateOut[Natal Patch, Emigrated Patch],
-	// entry is 1 – MigrateOut[Natal Patch, Emigrated Patch] – MigrateBack[Emigrated Patch, Natal Patch]/MigrateOut[Natal Patch, Emigrated Patch]
-	return_matrix[MIGRATIONBACK < t(MIGRATIONOUT)] = 1 - t(MIGRATIONOUT)[MIGRATIONBACK < t(MIGRATIONOUT)] - MIGRATIONBACK[MIGRATIONBACK < t(MIGRATIONOUT)]/t(MIGRATIONOUT)[MIGRATIONBACK < t(MIGRATIONOUT)];
+	// Probability of returning to the natal patch from the emigrated patch
+	// Matches CDMetaPOP (GetProbArray, 'immigrator'), using the migrate back matrix as read from file:
+	//   BA = Back[emigrated, natal] (getting home), AB = Back[natal, emigrated] (getting out)
+	//   BA < AB: partial barrier, probability 1 - (AB - BA)/AB = BA/AB (BA = 0 gives 0: complete barrier)
+	//   otherwise: probability 1. As in CDMetaPOP, this includes BA = AB = 0.
+	//   Natal patch must be a natal ground. (Natal patches with K = 0 are handled at migration time.)
+	// Rows are the emigrated patch, columns the natal patch
+	BA = back_matrix;
+	AB = t(back_matrix);
+	return_matrix = matrix(rep(1.0, length(BA)), nrow = nrow(BA));
+	partial = BA < AB;
+	return_matrix[partial] = BA[partial] / AB[partial];
+	return_matrix[, ngrounds == 0] = 0.0;
+	if (NPATCHES != "all"){return_matrix = return_matrix[PATCHIDS,PATCHIDS];}
 	defineGlobal("RETURNMATRIX", return_matrix);
 	
 	// Dispersal matrix
