@@ -236,9 +236,12 @@ initialize() {
 			potential_nqtls = qtl_counts[i];
 			print(potential_nqtls + " QTLs");
 			// Pick start positions for QTL regions
-			potential_starts = 0:asInteger(length/QTL_REGION_LENGTH - 1)*QTL_REGION_LENGTH;
-			nqtls = min(potential_nqtls, length(potential_starts));
-			qtl_starts = sort(sample(potential_starts, nqtls));
+			// Number of non-overlapping QTL regions that fit on the chromosome (0 if it is shorter than one region)
+			nslots = asInteger(floor(length/QTL_REGION_LENGTH));
+			if(nslots > 0) potential_starts = (0:(nslots - 1))*QTL_REGION_LENGTH; else potential_starts = integer(0);
+			nqtls = min(potential_nqtls, nslots);
+			if(nqtls < potential_nqtls) print("Chromosome " + id + " only has room for " + nslots + " QTL regions; " + (potential_nqtls - nqtls) + " QTL regions dropped");
+			if(nqtls > 0) qtl_starts = sort(sample(potential_starts, nqtls)); else qtl_starts = integer(0);
 			// Add QTL genomic elements to QTL regions and neutral genomic elements to in between regions
 			// Keep track of mutation rate regions
 			region_ends = c();
