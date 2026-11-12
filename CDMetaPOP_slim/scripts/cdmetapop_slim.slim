@@ -1090,6 +1090,8 @@ function (void)setupConstantsFromPopVars(object<Dictionary>$ popvars)
 	// Files containing allele frequencies
 	patch_genefiles = PATCHVARS.getValue("genes_file_slim");
 	if(NPATCHES != "all"){
+		if(!isInteger(NPATCHES) & !isFloat(NPATCHES)) stop("NPATCHES must be 'all' or a number of patches, but is '" + NPATCHES + "'.");
+		if(NPATCHES < 1 | NPATCHES > length(patchids)) stop("NPATCHES is " + NPATCHES + ", but must be between 1 and the number of patches in PatchVars (" + length(patchids) + ").");
 		defineConstant("PATCHIDS", patchids[0:(NPATCHES-1)]);
 		defineGlobal("PATCHKS", rnorm(length(patchks[PATCHIDS]), patchks[PATCHIDS], patchstdevs[PATCHIDS]));
 		defineConstant("PATCHN0S", patchn0s[PATCHIDS]);
