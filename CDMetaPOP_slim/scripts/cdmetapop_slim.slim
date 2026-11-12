@@ -712,8 +712,22 @@ early(){
 	ages = CLASSVARS.getValue("Age class")[CLASSVARS.getValue("Age class") != 0];
 	if(SIZECONTROL) defineGlobal("N_GROWTHBACK", c(0, sapply(ages, "sum(age_class(sim.subpopulations.individuals, 'size') == applyValue);"))); else defineGlobal("N_GROWTHBACK", c(0, sapply(ages, "sum(age_class(sim.subpopulations.individuals, 'age') == applyValue);")));
 
-	
+
 	// CDMetaPOP output here
+}
+
+early(){
+	// Heritability of Topt and epsilon, calculated from this tick's newborns (age 0 after aging) before any
+	// selection or mortality, so that genetic and environmental effects are independent.
+	// Written in the QTL output later this tick.
+	if(QTL & QTL_TPC){
+		inds = sim.subpopulations.individuals;
+		newborns = inds[inds.getValue("cdmp_age") == 0];
+		defineGlobal("H2_TOPT_OVERALL", newborn_heritability(newborns, "Topt", m2));
+		defineGlobal("H2_EPSILON_OVERALL", newborn_heritability(newborns, "epsilon", m4));
+		defineGlobal("H2_TOPT_SUBPOPS", sapply(sim.subpopulations, "newborn_heritability(newborns[newborns.subpopulation == applyValue], 'Topt', m2);"));
+		defineGlobal("H2_EPSILON_SUBPOPS", sapply(sim.subpopulations, "newborn_heritability(newborns[newborns.subpopulation == applyValue], 'epsilon', m4);"));
+	}
 }
 
 mutationEffect(m1) { return 1.0; }
@@ -1591,6 +1605,20 @@ function (void)writeSubpopOutput(string outfile, logical header){
 		
 }
 
+// Narrow-sense heritability Va/Vp of a trait among a set of individuals (NAN if fewer than 2 or no phenotypic variance)
+function (float$) newborn_heritability(object<Individual> inds, string$ trait, object<MutationType>$ mut_type){
+	if(size(inds) < 2) return NAN;
+	vp = var(inds.getValue(trait));
+	if(vp == 0) return NAN;
+	return calcVA(inds, mut_type)/vp;
+}
+
+// Heritability value for output: 'NA' if it could not be calculated
+function (*) heritability_output(float$ h2){
+	if(isNAN(h2)) return 'NA';
+	return h2;
+}
+
 function (void) writeQTLOutputOverall(string outfile, logical header, logical qtl_tpc){
 	if(!qtl_tpc) overall_header = "year,K,popsize,phenotypic_variance,Va,Ve,heritability,qtl_alleles,avg_effect_size,neutral_pi,overall_pi";
 	if(qtl_tpc) overall_header = "year,K,popsize,Topt_variance,Topt_Va,Topt_Ve,Topt_heritability,Topt_alleles,Topt_avg_effect_size,epsilon_variance,epsilon_Va,epsilon_Ve,epsilon_heritability,epsilon_alleles,epsilon_avg_effect_size,neutral_pi,overall_pi";
@@ -1617,14 +1645,14 @@ function (void) writeQTLOutputOverall(string outfile, logical header, logical qt
 		Topt_variance = var(sim.subpopulations.individuals.getValue('Topt'));
 		Topt_Va = calcVA(sim.subpopulations.individuals, m2);
 		Topt_Ve = var(sim.subpopulations.individuals.getValue('Topt') - sim.subpopulations.individuals.sumOfMutationsOfType(m2));
-		//Topt_heritability = Topt_Va/(Topt_Va + Topt_Ve);
-		Topt_heritability = Topt_Va/Topt_variance;
+		// Heritability is calculated from this tick's newborns, before selection (see early())
+		Topt_heritability = heritability_output(H2_TOPT_OVERALL);
 		Topt_alleles = length(unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2)));
 		Topt_avg_effect_size = mean(abs(c(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2).selectionCoeff, sim.substitutionsOfType(m2).selectionCoeff)));
 		epsilon_variance = var(sim.subpopulations.individuals.getValue('epsilon'));
 		epsilon_Va = calcVA(sim.subpopulations.individuals, m4);
 		epsilon_Ve = var(sim.subpopulations.individuals.getValue('epsilon') - sim.subpopulations.individuals.sumOfMutationsOfType(m4));
-		epsilon_heritability = epsilon_Va/(epsilon_Va + epsilon_Ve);
+		epsilon_heritability = heritability_output(H2_EPSILON_OVERALL);
 		epsilon_alleles = length(unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(m4)));
 		epsilon_avg_effect_size = mean(abs(c(sim.subpopulations.individuals.haplosomes.mutationsOfType(m4).selectionCoeff, sim.substitutionsOfType(m4).selectionCoeff)));
 		chromosomes = sim.chromosomesOfType("A");
@@ -1688,14 +1716,15 @@ function (void) writeQTLOutputSubpops(string outfile, logical header, logical qt
 			Topt_variance = var(subpop.individuals.getValue('Topt'));
 			Topt_Va = calcVA(subpop.individuals, m2);
 			Topt_Ve = var(subpop.individuals.getValue('Topt') - subpop.individuals.sumOfMutationsOfType(m2));
-			Topt_heritability = Topt_Va/Topt_variance;
+			// Heritability is calculated from this tick's newborns in the patch, before selection (see early())
+			Topt_heritability = heritability_output(H2_TOPT_SUBPOPS[PatchID]);
 			Topt_alleles = length(unique(subpop.individuals.haplosomes.mutationsOfType(m2)));
 			Topt_avg_effect_size = mean(abs(c(subpop.individuals.haplosomes.mutationsOfType(m2).selectionCoeff, sim.substitutionsOfType(m2).selectionCoeff)));
 			avg_epsilon = mean(subpop.individuals.getValue('epsilon'));
 			epsilon_variance = var(subpop.individuals.getValue('epsilon'));
 			epsilon_Va = calcVA(subpop.individuals, m4);
 			epsilon_Ve = var(subpop.individuals.getValue('epsilon') - subpop.individuals.sumOfMutationsOfType(m4));
-			epsilon_heritability = epsilon_Va/(epsilon_Va + epsilon_Ve);
+			epsilon_heritability = heritability_output(H2_EPSILON_SUBPOPS[PatchID]);
 			epsilon_alleles = length(unique(subpop.individuals.haplosomes.mutationsOfType(m4)));
 			epsilon_avg_effect_size = mean(abs(c(subpop.individuals.haplosomes.mutationsOfType(m4).selectionCoeff, sim.substitutionsOfType(m4).selectionCoeff)));
 			chromosomes = sim.chromosomesOfType("A");
