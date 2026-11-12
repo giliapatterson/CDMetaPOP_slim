@@ -717,16 +717,22 @@ early(){
 }
 
 early(){
-	// Heritability of Topt and epsilon, calculated from this tick's newborns (age 0 after aging) before any
-	// selection or mortality, so that genetic and environmental effects are independent.
+	// Heritability of the quantitative trait (or of Topt and epsilon), calculated from this tick's newborns
+	// (age 0 after aging) before any selection or mortality, so that genetic and environmental effects are independent.
 	// Written in the QTL output later this tick.
-	if(QTL & QTL_TPC){
+	if(QTL){
 		inds = sim.subpopulations.individuals;
 		newborns = inds[inds.getValue("cdmp_age") == 0];
-		defineGlobal("H2_TOPT_OVERALL", newborn_heritability(newborns, "Topt", m2));
-		defineGlobal("H2_EPSILON_OVERALL", newborn_heritability(newborns, "epsilon", m4));
-		defineGlobal("H2_TOPT_SUBPOPS", sapply(sim.subpopulations, "newborn_heritability(newborns[newborns.subpopulation == applyValue], 'Topt', m2);"));
-		defineGlobal("H2_EPSILON_SUBPOPS", sapply(sim.subpopulations, "newborn_heritability(newborns[newborns.subpopulation == applyValue], 'epsilon', m4);"));
+		if(!QTL_TPC){
+			defineGlobal("H2_OVERALL", newborn_heritability(newborns, "phenotype", m2));
+			defineGlobal("H2_SUBPOPS", sapply(sim.subpopulations, "newborn_heritability(newborns[newborns.subpopulation == applyValue], 'phenotype', m2);"));
+		}
+		else{
+			defineGlobal("H2_TOPT_OVERALL", newborn_heritability(newborns, "Topt", m2));
+			defineGlobal("H2_EPSILON_OVERALL", newborn_heritability(newborns, "epsilon", m4));
+			defineGlobal("H2_TOPT_SUBPOPS", sapply(sim.subpopulations, "newborn_heritability(newborns[newborns.subpopulation == applyValue], 'Topt', m2);"));
+			defineGlobal("H2_EPSILON_SUBPOPS", sapply(sim.subpopulations, "newborn_heritability(newborns[newborns.subpopulation == applyValue], 'epsilon', m4);"));
+		}
 	}
 }
 
@@ -1633,7 +1639,8 @@ function (void) writeQTLOutputOverall(string outfile, logical header, logical qt
 		phenotypic_variance = var(sim.subpopulations.individuals.getValue('phenotype'));
 		Va = calcVA(sim.subpopulations.individuals, m2);
 		Ve = var(sim.subpopulations.individuals.getValue('phenotype') - sim.subpopulations.individuals.sumOfMutationsOfType(m2));
-		heritability = Va/(Va + Ve);
+		// Heritability is calculated from this tick's newborns, before selection (see early())
+		heritability = heritability_output(H2_OVERALL);
 		qtl_alleles = length(unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2)));
 		avg_effect_size = mean(abs(c(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2).selectionCoeff, sim.substitutionsOfType(m2).selectionCoeff)));
 		chromosomes = sim.chromosomesOfType("A");
@@ -1704,7 +1711,8 @@ function (void) writeQTLOutputSubpops(string outfile, logical header, logical qt
 			phenotypic_variance = var(subpop.individuals.getValue('phenotype'));
 			Va = calcVA(subpop.individuals, m2);
 			Ve = var(subpop.individuals.getValue('phenotype') - subpop.individuals.sumOfMutationsOfType(m2));
-			heritability = Va/(Va + Ve);
+			// Heritability is calculated from this tick's newborns in the patch, before selection (see early())
+			heritability = heritability_output(H2_SUBPOPS[PatchID]);
 			qtl_alleles = length(unique(subpop.individuals.haplosomes.mutationsOfType(m2)));
 			avg_effect_size = mean(abs(c(subpop.individuals.haplosomes.mutationsOfType(m2).selectionCoeff, sim.substitutionsOfType(m2).selectionCoeff)));
 			chromosomes = sim.chromosomesOfType("A");
