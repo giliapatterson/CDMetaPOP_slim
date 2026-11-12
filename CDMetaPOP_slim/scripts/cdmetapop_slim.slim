@@ -191,6 +191,7 @@ first(){
 		if (new_subpop.individualCount > 0){
 			individuals = new_subpop.individuals;
 			individuals.setValue("natal", patchID);
+			individuals.setValue("migrant", F); // T after migrating out, until returning home or straying
 			cdmp_ages = sample(CLASSVARS.getValue("Age class"), size = new_subpop.individualCount, replace = T, weights = CLASSVARS.getValue("Distribution"));
 			// Keep track of age separately so that it can be updated in the correct order
 			individuals.setValuesVectorized("cdmp_age", cdmp_ages);
@@ -420,6 +421,7 @@ reproduction(NULL, "F") {
 				individual.tagL1 = T; // Lay eggs?
 				offspring = subpop.addCrossed(individual, mate, count = neggs);
 				offspring.setValue("natal", subpop.id);
+				offspring.setValue("migrant", F);
 				offspring.setValue("cdmp_age", -1);
 				offspring.tagL0 = F;
 				offspring.tagL1 = F;
@@ -504,22 +506,40 @@ early(){
 	// CDMetaPOP output here
 }
 
+early(){
+	// Heritability of the quantitative trait, calculated from this tick's newborns (age 0 after aging) before any
+	// selection or mortality, so that genetic and environmental effects are independent.
+	// Written in the QTL output later this tick.
+	if(QTL){
+		inds = sim.subpopulations.individuals;
+		newborns = inds[inds.getValue("cdmp_age") == 0];
+		defineGlobal("H2_OVERALL", newborn_heritability(newborns, "phenotype", m2));
+		defineGlobal("H2_SUBPOPS", sapply(sim.subpopulations, "newborn_heritability(newborns[newborns.subpopulation == applyValue], 'phenotype', m2);"));
+	}
+}
+
 mutationEffect(m1) { return 1.0; }
 mutationEffect(m2) { return 1.0; }
 
 
 late(){
 	print("Migration Out");
-	// Migration out (age 0s don't migrate out)
+	// Migration out. Age 0s (born this tick) don't migrate out: as in CDMetaPOP, where offspring are added after
+	// the migrate-out step, individuals first migrate out the year after they are born, at age 1.
 	all_inds = sim.subpopulations.individuals;
 	all_ages = age_class(all_inds, method = "age");
-	individuals = all_inds[all_ages >=0];
+	individuals = all_inds[all_ages > 0];
 	if(SIZECONTROL) age_classes = age_class(individuals, method = "size"); else age_classes = age_class(individuals, method = "age");
 	pmigrate_out = PATCHVARS.getValue("Migration Out Prob")[individuals.subpopulation.id]*CLASSVARS.getValue("Migration Out Prob")[age_classes];
 	migrators = individuals[runif(length(individuals)) < pmigrate_out];
 	destinations = sample_subpops(migrators, MIGRATIONOUT);
 	//print(sum(destinations.id == 3) + " individuals migrated to 3.");
 	for (dest in unique(destinations)){dest.takeMigrants(migrators[destinations == dest]);}
+	// Individuals that had somewhere to migrate to are now migrants (see Straying and Migration Back)
+	if(length(migrators) > 0){
+		had_destination = sapply(migrators.subpopulation.id, "sum(MIGRATIONOUT[applyValue,]) > 0;");
+		migrators[had_destination].setValue("migrant", T);
+	}
 	//popsizes = sapply(sim.subpopulations, "applyValue.individualCount;");
 	//print("Population sizes: " + paste(popsizes));
 }
@@ -584,27 +604,56 @@ late(){
 
 late(){
 	print("Straying and Migration Back");
+	// Follows CDMetaPOP (Immigration). Only migrants (individuals that migrated out and have not yet returned
+	// home or strayed) are considered:
+	//   1. Decide whether to migrate back (Migration Back Prob of the current patch and of the class).
+	//      Migrants that don't migrate back stay where they are and remain migrants.
+	//   2. Of those migrating back, decide whether to stray (Straying Prob of the natal patch and of the class).
+	//      Strayers move using the stray matrix row of their current patch (patches with K > 0 only), and that
+	//      patch becomes their natal patch. If there is nowhere to stray to, they die.
+	//   3. The rest attempt to return to their natal patch (RETURNMATRIX; not possible if the natal patch has K = 0).
+	//      Those that fail die or stray again according to HOMEATTEMPT.
 	all_inds = sim.subpopulations.individuals;
-	all_ages = age_class(all_inds, method = "age");
-	individuals = all_inds[all_ages >=0];
+	individuals = all_inds[all_inds.getValue("migrant")];
+	n = length(individuals);
+	if(n == 0) return;
 	if(SIZECONTROL) age_classes = age_class(individuals, method = "size"); else age_classes = age_class(individuals, method = "age");
-	
-	// Straying
-	pstray = PATCHVARS.getValue("Straying Prob")[individuals.subpopulation.id]*CLASSVARS.getValue("Straying Prob")[age_classes];
-	does_stray = runif(length(individuals)) < pstray;
-	// Migration back
 	natal_pops = individuals.getValue("natal");
 	emigrated_pops = individuals.subpopulation.id;
-	pmigrate_back = PATCHVARS.getValue("Migration Back Prob")[emigrated_pops]*sapply(seqAlong(individuals), "RETURNMATRIX[emigrated_pops[applyValue], natal_pops[applyValue]];")*CLASSVARS.getValue("Migration Back Prob")[age_classes];
-	does_migrate = runif(length(individuals)) < pmigrate_back;
-	// Migrate back and stray
-	migrators = individuals[does_migrate & !does_stray];
-	migrator_destinations = sim.subpopulations[natal_pops[does_migrate & !does_stray]];
-	for (dest in unique(migrator_destinations)){dest.takeMigrants(migrators[migrator_destinations == dest]);}
-	strayers = individuals[does_stray];
-	strayer_destinations = sample_subpops(strayers, STRAYMATRIX);
-	for (dest in unique(strayer_destinations)){dest.takeMigrants(strayers[strayer_destinations == dest]);}
-	//print(length(migrators) + " individuals migrated back, " + length(strayers) + " strayed.");
+	
+	// 1. Migrate back?
+	pmigrate_back = PATCHVARS.getValue("Migration Back Prob")[emigrated_pops]*CLASSVARS.getValue("Migration Back Prob")[age_classes];
+	goes_back = runif(n) < pmigrate_back;
+	// 2. Stray?
+	pstray = PATCHVARS.getValue("Straying Prob")[natal_pops]*CLASSVARS.getValue("Straying Prob")[age_classes];
+	does_stray = goes_back & (runif(n) < pstray);
+	// 3. Make it home?
+	preturn = sapply(seqAlong(individuals), "RETURNMATRIX[emigrated_pops[applyValue], natal_pops[applyValue]];") * asFloat(PATCHKS[natal_pops] > 0);
+	attempts = goes_back & !does_stray;
+	returns = attempts & (runif(n) < preturn);
+	fails = attempts & !returns;
+	
+	// Destinations (-1 = dies)
+	destinations = rep(-1, n);
+	destinations[returns] = natal_pops[returns];
+	if(sum(does_stray) > 0) destinations[does_stray] = stray_destinations(individuals[does_stray], "emiPop");
+	if(sum(fails) > 0){
+		if(HOMEATTEMPT == "stray_emiPop") destinations[fails] = stray_destinations(individuals[fails], "emiPop");
+		if(HOMEATTEMPT == "stray_natalPop") destinations[fails] = stray_destinations(individuals[fails], "natalPop");
+		// HOMEATTEMPT == "mortality": destinations stay -1
+	}
+	moves = goes_back & destinations >= 0;
+	strayed = moves & !returns;
+	
+	// Strayers get a new natal patch; individuals that return home or stray are no longer migrants
+	if(sum(strayed) > 0) individuals[strayed].setValuesVectorized("natal", destinations[strayed]);
+	if(sum(moves) > 0){
+		individuals[moves].setValue("migrant", F);
+		for (dest in unique(destinations[moves])){sim.subpopulations[dest].takeMigrants(individuals[moves & destinations == dest]);}
+	}
+	dies = goes_back & destinations < 0;
+	if(sum(dies) > 0) sim.killIndividuals(individuals[dies]);
+	print(n + " migrants: " + sum(returns) + " returned home, " + sum(strayed) + " strayed, " + sum(dies) + " died trying to return or stray, " + sum(!goes_back) + " stayed.");
 }
 
 late(){
@@ -809,6 +858,26 @@ function (integer)num_eggs(object<Individual> ind){
 	}
 }
 
+// Destinations for straying individuals, following CDMetaPOP (GetProbArray 'strayer_emiPop' / 'strayer_natalPop'):
+//   "emiPop": stray matrix row of the current patch
+//   "natalPop": stray matrix row of the natal patch, only to patches reachable from the current patch
+// STRAYMATRIX already excludes non-natal grounds; patches with K <= 0 are also excluded. -1 if there is nowhere to stray to.
+function (integer)stray_destinations(object<Individual> individuals, string$ from){
+	destinations = integer(length(individuals));
+	open = asFloat(PATCHKS > 0);
+	for (i in seqAlong(individuals)){
+		current = individuals[i].subpopulation.id;
+		if(from == "emiPop") weights = drop(STRAYMATRIX[current,]) * open;
+		else{
+			weights = drop(STRAYMATRIX[individuals[i].getValue("natal"),]) * open;
+			weights[drop(STRAYMATRIX[current,]) == 0] = 0.0;
+		}
+		if(sum(weights) == 0) destinations[i] = -1;
+		else destinations[i] = sample(PATCHIDS, size = 1, weights = weights);
+	}
+	return(destinations);
+}
+
 // Sample subpopulations according to a probability matrix
 function (object<Subpopulation>)sample_subpops(object<Individual> individuals, float prob_matrix){
 	sources = individuals.subpopulation;
@@ -920,10 +989,10 @@ function (void)mature(object <Individual> individuals){
 // Packing
 function (integer)packing_survivors(object<Subpopulation> pack_subpop, string age_class_method){
 	Nj = pack_subpop.individualCount; // Current N
-	if(Nj == 0){
+	Kj = PATCHKS[pack_subpop.id]; // Total carrying capacity for the patch
+	if(Nj == 0 | Kj <= 0){
 		return(integer(length(CLASSVARS.getValue("Age class"))));
 	}
-	Kj = PATCHKS[pack_subpop.id]; // Total carrying capacity for the patch
 	if (Kj == Nj) R0j = 1; else R0j = (log(Kj/Nj))/(1-Nj/Kj); // Adjusted R0
 	is = CLASSVARS.getValue("Age class"); // Age classes and indices of age classes
 	ind_age_classes = age_class(pack_subpop.individuals, method = age_class_method); // Age classes of every individual in the population
@@ -944,7 +1013,7 @@ function (integer)packing_survivors(object<Subpopulation> pack_subpop, string ag
 		Kage_hab_adj_inc = Kage_hab_adj_inc + (Kage_hab_adj/classcount);
 		// Adjust the Kage_hab
 		Kage_hab = Kage_hab + Kage_hab_adj_inc;
-  		Kage = Nji[i]*exp(R0ji[i]*(1-(Nji[i]/(Kj*Kage_hab))));
+  		if (Nji[i] == 0) Kage = 0.0; else Kage = Nji[i]*exp(R0ji[i]*(1-(Nji[i]/(Kj*Kage_hab))));
   		Kused = min(asFloat(Nji[i]), Kage);
   		nsurvive[i] = Kused;
 		if (Kage == 0) Kage_hab_adj = Kage_hab;
@@ -1003,52 +1072,6 @@ function (object <Dictionary>)carrying_capacity_mortality(void){
 	return(Dictionary("nkilled_subpops", nkilled, "nkilled_ages", nkilled_age));
 }
 
-function (string)age_distribution(object<Subpopulation> subpop, string method){
-	if(subpop.individualCount == 0) return(NULL);
-	// Calculate age distribution within the subpopulation subpop
-	// And return a string for printing to file
-	individuals = subpop.individuals;
-	age_classes = age_class(individuals, method);
-	// store information for output
-	out_string = string(length(age_classes));
-	for (age_class in CLASSVARS.getValue("Age class"))
-	{
-		individual_count = sum(age_classes == age_class);
-		proportion = individual_count/subpop.individualCount;
-		out_string[age_class] = paste0(community.tick, ",", subpop.id, ",", age_class, ",", individual_count, ",",proportion, "\n");
-	}
-	return(paste0(out_string));
-}
-
-
-function (string)msat_freqs(object<Subpopulation> subpop){
-	// Calculate allele frequencies within the subpopulation subpop
-	// And return a string for printing to file
-	if(length(community.allMutationTypes) == 1){
-		all_alleles = unique(subpop.individuals.haplosomes.mutationsOfType(m1));
-		positions = seq(0, NLOCI - 1, 1);
-		// store information for output
-		out_string = string(length(all_alleles));
-		i = 0;
-		for (pos in sort(positions))
-		{
-			allelesAtPos = all_alleles[all_alleles.position == pos];
-			for (allele in sortBy(allelesAtPos, "tag")){
-				allele_freq = sim.mutationFrequencies(subpop, allele);
-				out_string[i] = paste0(community.tick, ",", subpop.id, ",", pos, ",", allele.tag, ",",allele_freq, "\n");
-				i = i+1;
-			}
-		}
-	}
-	if(length(community.allMutationTypes) == 0){
-		out_string = paste0(community.tick, ",", subpop.id, ",", "NA", ",", "NA", ",","NA", "\n");
-	}
-	if(length(community.allMutationTypes) > 1){
-		print("Error: function for calculating allele frequencies doesn't yet handle more than one mutation type.");
-		out_string = paste0(community.tick, ",", subpop.id, ",", "NA", ",", "NA", ",","NA", "\n");
-	}
-	return(paste0(out_string));
-}
 
 function (void)setupParams(object<Dictionary>$ defaults)
 {
@@ -1088,6 +1111,8 @@ function (void)setupConstantsFromPopVars(object<Dictionary>$ popvars)
 	// Files containing allele frequencies
 	patch_genefiles = PATCHVARS.getValue("genes_file_slim");
 	if(NPATCHES != "all"){
+		if(!isInteger(NPATCHES) & !isFloat(NPATCHES)) stop("NPATCHES must be 'all' or a number of patches, but is '" + NPATCHES + "'.");
+		if(NPATCHES < 1 | NPATCHES > length(patchids)) stop("NPATCHES is " + NPATCHES + ", but must be between 1 and the number of patches in PatchVars (" + length(patchids) + ").");
 		defineConstant("PATCHIDS", patchids[0:(NPATCHES-1)]);
 		defineGlobal("PATCHKS", rnorm(length(patchks[PATCHIDS]), patchks[PATCHIDS], patchstdevs[PATCHIDS]));
 		defineConstant("PATCHN0S", patchn0s[PATCHIDS]);
@@ -1170,25 +1195,28 @@ function (void)setupGlobalsFromPopVars(object<Dictionary>$ popvars){
 	if (NPATCHES != "all"){stray_matrix = stray_matrix[PATCHIDS,PATCHIDS];}
 	defineGlobal("STRAYMATRIX", asFloat(stray_matrix));
 	
-	// Migration back matrix
-	migration_matrix = readCSV(safe_path(PARAM_FOLDER, popvars.getValue('migrateback_cdmat')), colNames = asString(PATCHIDS)).asMatrix();
-	migration_matrix[,ngrounds == 0] = 0; // Can't migrate back to non-natal grounds
-	if (NPATCHES != "all"){migration_matrix = migration_matrix[PATCHIDS,PATCHIDS];}
-	defineGlobal("MIGRATIONBACK", asFloat(migration_matrix));
+	// What happens to migrants that fail to return to their natal patch (CDMetaPOP HomeAttempt)
+	if(isNULL(popvars.getValue("HomeAttempt"))) homeattempt = "mortality"; else homeattempt = asString(popvars.getValue("HomeAttempt")[0]);
+	if(!any(homeattempt == c("mortality", "stray_emiPop", "stray_natalPop"))) stop("HomeAttempt must be mortality, stray_emiPop, or stray_natalPop, but is '" + homeattempt + "'.");
+	defineGlobal("HOMEATTEMPT", homeattempt);
 	
-	// Probability of migrating back to natal patch from each other patch
-	// Natal to emigrated: MIGRATIONOUT, natal patch is row, emigrated patch is column
-	// Emigrated to Natal : MIGRATIONBACK, emigrated patch is row, natal patch is column
-	// We want a matrix with emigrated patch as row, natal patch as column, and each entry the
-	// probability of returning to the natal patch from the emigrated patch
-	return_matrix = matrix(rep(0.0, asInteger(nrow(MIGRATIONBACK)^2)), nrow = nrow(MIGRATIONBACK));
-	// If MigrateBack[Emigrated Patch, Natal Patch] = 0.0, then entry is 0
-	return_matrix[MIGRATIONBACK == 0] = 0;
-	// If MigrateBack[Emigrated Patch, Natal Patch] = MigrateOut[Natal Patch, Emigrated Patch], entry is 1
-	return_matrix[MIGRATIONBACK == t(MIGRATIONOUT)] = 1.0;
-	// If MigrateBack[Emigrated Patch, Natal Patch] < MigrateOut[Natal Patch, Emigrated Patch],
-	// entry is 1 – MigrateOut[Natal Patch, Emigrated Patch] – MigrateBack[Emigrated Patch, Natal Patch]/MigrateOut[Natal Patch, Emigrated Patch]
-	return_matrix[MIGRATIONBACK < t(MIGRATIONOUT)] = 1 - t(MIGRATIONOUT)[MIGRATIONBACK < t(MIGRATIONOUT)] - MIGRATIONBACK[MIGRATIONBACK < t(MIGRATIONOUT)]/t(MIGRATIONOUT)[MIGRATIONBACK < t(MIGRATIONOUT)];
+	// Migration back matrix (only used for the probability of returning to the natal patch, below)
+	back_matrix = asFloat(readCSV(safe_path(PARAM_FOLDER, popvars.getValue('migrateback_cdmat')), colNames = asString(PATCHIDS)).asMatrix());
+	
+	// Probability of returning to the natal patch from the emigrated patch
+	// Matches CDMetaPOP (GetProbArray, 'immigrator'), using the migrate back matrix as read from file:
+	//   BA = Back[emigrated, natal] (getting home), AB = Back[natal, emigrated] (getting out)
+	//   BA < AB: partial barrier, probability 1 - (AB - BA)/AB = BA/AB (BA = 0 gives 0: complete barrier)
+	//   otherwise: probability 1. As in CDMetaPOP, this includes BA = AB = 0.
+	//   Natal patch must be a natal ground. (Natal patches with K = 0 are handled at migration time.)
+	// Rows are the emigrated patch, columns the natal patch
+	BA = back_matrix;
+	AB = t(back_matrix);
+	return_matrix = matrix(rep(1.0, length(BA)), nrow = nrow(BA));
+	partial = BA < AB;
+	return_matrix[partial] = BA[partial] / AB[partial];
+	return_matrix[, ngrounds == 0] = 0.0;
+	if (NPATCHES != "all"){return_matrix = return_matrix[PATCHIDS,PATCHIDS];}
 	defineGlobal("RETURNMATRIX", return_matrix);
 	
 	// Dispersal matrix
@@ -1267,6 +1295,20 @@ function (void)writeSubpopOutput(string outfile, logical header){
 		
 }
 
+// Narrow-sense heritability Va/Vp of a trait among a set of individuals (NAN if fewer than 2 or no phenotypic variance)
+function (float$) newborn_heritability(object<Individual> inds, string$ trait, object<MutationType>$ mut_type){
+	if(size(inds) < 2) return NAN;
+	vp = var(inds.getValue(trait));
+	if(vp == 0) return NAN;
+	return calcVA(inds, mut_type)/vp;
+}
+
+// Heritability value for output: 'NA' if it could not be calculated
+function (*) heritability_output(float$ h2){
+	if(isNAN(h2)) return 'NA';
+	return h2;
+}
+
 function (void) writeQTLOutputOverall(string outfile, logical header){
 	overall_header = "year,K,popsize,phenotypic_variance,Va,Ve,heritability,qtl_alleles,avg_effect_size,neutral_pi,overall_pi";
 	if(header){
@@ -1280,7 +1322,8 @@ function (void) writeQTLOutputOverall(string outfile, logical header){
 		phenotypic_variance = var(sim.subpopulations.individuals.getValue('phenotype'));
 		Va = calcVA(sim.subpopulations.individuals, m2);
 		Ve = var(sim.subpopulations.individuals.getValue('phenotype') - sim.subpopulations.individuals.sumOfMutationsOfType(m2));
-		heritability = Va/(Va + Ve);
+		// Heritability is calculated from this tick's newborns, before selection (see early())
+		heritability = heritability_output(H2_OVERALL);
 		qtl_alleles = length(unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2)));
 		avg_effect_size = mean(abs(c(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2).selectionCoeff, sim.substitutionsOfType(m2).selectionCoeff)));
 		chromosomes = sim.chromosomesOfType("A");
@@ -1319,7 +1362,8 @@ function (void) writeQTLOutputSubpops(string outfile, logical header){
 			phenotypic_variance = var(subpop.individuals.getValue('phenotype'));
 			Va = calcVA(subpop.individuals, m2);
 			Ve = var(subpop.individuals.getValue('phenotype') - subpop.individuals.sumOfMutationsOfType(m2));
-			heritability = Va/(Va + Ve);
+			// Heritability is calculated from this tick's newborns in the patch, before selection (see early())
+			heritability = heritability_output(H2_SUBPOPS[PatchID]);
 			qtl_alleles = length(unique(subpop.individuals.haplosomes.mutationsOfType(m2)));
 			avg_effect_size = mean(abs(c(subpop.individuals.haplosomes.mutationsOfType(m2).selectionCoeff, sim.substitutionsOfType(m2).selectionCoeff)));
 			chromosomes = sim.chromosomesOfType("A");
