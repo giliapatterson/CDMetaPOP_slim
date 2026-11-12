@@ -77,7 +77,7 @@ and the heritability of the trait is $V_A/(V_E + V_A)$. This model does not incl
 
 The default behavior is for the simulation to be initialized with no genetic variation and with a genome of length `genome_length`. At this point all individuals have the same phenotype, $B$. The user specifies the proportion of the genome where mutations that arise will affect the phenotype, `qtl_prop_genome`, as well as a mutation rate, `qtl_muterate`. When a new mutation arises in the quantitative trait portion of the genome, its phenotypic effect is drawn from the distribution of phenotypic effects specified by the user, `qtl_pheno_eff`. For example, if `qtl_pheno_eff = rnorm(1, 0, 5.0)`, then the phenotypic effect is drawn from a normal distribution with mean 0 and standard deviation 5.0. Mutations that arise in the remaining portion of the genome are neutral. The user also specifies a recombination rate for the genome, `qtl_recrate`. `qtl_muterate` and `qtl_recrate` can change over time, but `genome_length`, `qtl_prop_genome`, and `qtl_pheno_eff` cannot. 
 
-Selection on the trait takes place immediately after dispersal, before the "Packing back" step. Selection takes place through excess mortality. The probability an individual dies in the selection step is determined by the deviation of its phenotype from the environment it experiences. The user specifies which environmental variable the phenotype is linked to in `qtl_env_variable`. `qtl_env_variable` must be the name of a column in the PatchVars file. The probability an individual dies is:
+Selection on the trait takes place immediately after dispersal, before the "Packing back" step. Selection takes place through excess mortality. The probability an individual dies in the selection step is determined by the deviation of its phenotype from the environment it experiences. The user specifies which environmental variable the phenotype is linked to in `qtl_env_variable`. `qtl_env_variable` must be the name of a column in the PatchVars file. The probability an individual survives is:
 $$f((P_j-\text{environment experienced}))/f(0)$$
 where $f$ is the PDF of a normal distribution with mean 0 and standard deviation $\sigma = $ `qtl_fit_sd`,
 
@@ -142,7 +142,7 @@ If the quantitative trait model is used, CDMetaPOP_slim will output two addition
 
 `Ve`: Environmental variance.
 
-`heritability`: Equal to $V_A/(V_A + V_E)$.
+`heritability`: Equal to $V_A/V_P$, where $V_P$ is the total phenotypic variance and both $V_A$ and $V_P$ are calculated for each tick's newborn's before selection.
 
 `qtl_alleles`: Number of alleles that influence the quantitative trait.
 
@@ -176,7 +176,7 @@ If you are using Windows (and not Windows Subsystem for Linux), the bash script 
 
 ```
 Rscript climate_change_McKenzie/make_param_files.R
-python ../CDMetaPOP_slim/CDmetaPOP_slim.py -c2 -d climate_change_McKenzie -i RunVars.csv -o slim_output --no-filetime -s 300
+python ../CDMetaPOP_slim/CDMetaPOP_slim.py -c2 -d climate_change_McKenzie -i RunVars.csv -o slim_output --no-filetime -s 300
 Rscript climate_change_McKenzie/plot_qtl_model.R
 ```
 
@@ -191,7 +191,7 @@ This example runs the same model of evolution of thermal tolerance as the climat
 To run the script, navigate to the `example_runs/trout_genome` directory and run:
 
 ```
-python ../../CDMetaPOP_slim/CDmetaPOP_slim.py -c8 -d climate_change_McKenzie -i RunVars.csv -o slim_output --no-filetime -s 300
+python ../../CDMetaPOP_slim/CDMetaPOP_slim.py -c8 -d climate_change_McKenzie -i RunVars.csv -o slim_output --no-filetime -s 300
 ```
 
 1. Flores A-M, Christensen KA, Godin T, Palti Y, Campbell MR, Waldbieser GC, et al. The genome assembly of the westslope cutthroat trout, Oncorhynchus lewisi , reveals interspecific chromosomal rearrangements with the rainbow trout, Oncorhynchus mykiss. G3: Genes, Genomes, Genetics. 2025;15:jkaf064. https://doi.org/10.1093/g3journal/jkaf064.
