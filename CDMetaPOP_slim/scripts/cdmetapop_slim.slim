@@ -360,6 +360,7 @@ first(){
 		if (new_subpop.individualCount > 0){
 			individuals = new_subpop.individuals;
 			individuals.setValue("natal", patchID);
+			individuals.setValue("migrant", F); // T after migrating out, until returning home or straying
 			cdmp_ages = sample(CLASSVARS.getValue("Age class"), size = new_subpop.individualCount, replace = T, weights = CLASSVARS.getValue("Distribution"));
 			// Keep track of age separately so that it can be updated in the correct order
 			individuals.setValuesVectorized("cdmp_age", cdmp_ages);
@@ -626,6 +627,7 @@ reproduction(NULL, "F") {
 				individual.tagL1 = T; // Lay eggs?
 				offspring = subpop.addCrossed(individual, mate, count = neggs);
 				offspring.setValue("natal", subpop.id);
+				offspring.setValue("migrant", F);
 				offspring.setValue("cdmp_age", -1);
 				offspring.tagL0 = F;
 				offspring.tagL1 = F;
@@ -758,6 +760,11 @@ late(){
 	destinations = sample_subpops(migrators, MIGRATIONOUT);
 	//print(sum(destinations.id == 3) + " individuals migrated to 3.");
 	for (dest in unique(destinations)){dest.takeMigrants(migrators[destinations == dest]);}
+	// Individuals that had somewhere to migrate to are now migrants (see Straying and Migration Back)
+	if(length(migrators) > 0){
+		had_destination = sapply(migrators.subpopulation.id, "sum(MIGRATIONOUT[applyValue,]) > 0;");
+		migrators[had_destination].setValue("migrant", T);
+	}
 	//popsizes = sapply(sim.subpopulations, "applyValue.individualCount;");
 	//print("Population sizes: " + paste(popsizes));
 }
@@ -832,33 +839,61 @@ late(){
 
 late(){
 	print("Straying and Migration Back");
+	// Follows CDMetaPOP (Immigration). Only migrants (individuals that migrated out and have not yet returned
+	// home or strayed) are considered:
+	//   1. Decide whether to migrate back (Migration Back Prob of the current patch and of the class).
+	//      Migrants that don't migrate back stay where they are and remain migrants.
+	//   2. Of those migrating back, decide whether to stray (Straying Prob of the natal patch and of the class).
+	//      Strayers move using the stray matrix row of their current patch (patches with K > 0 only), and that
+	//      patch becomes their natal patch. If there is nowhere to stray to, they die.
+	//   3. The rest attempt to return to their natal patch (RETURNMATRIX; not possible if the natal patch has K = 0).
+	//      Those that fail die or stray again according to HOMEATTEMPT.
 	all_inds = sim.subpopulations.individuals;
-	all_ages = age_class(all_inds, method = "age");
-	individuals = all_inds[all_ages >=0];
+	individuals = all_inds[all_inds.getValue("migrant")];
+	n = length(individuals);
+	if(n == 0) return;
 	if(SIZECONTROL) age_classes = age_class(individuals, method = "size"); else age_classes = age_class(individuals, method = "age");
-	
-	// Straying
-	pstray = PATCHVARS.getValue("Straying Prob")[individuals.subpopulation.id]*CLASSVARS.getValue("Straying Prob")[age_classes];
-	does_stray = runif(length(individuals)) < pstray;
-	// Migration back
 	natal_pops = individuals.getValue("natal");
 	emigrated_pops = individuals.subpopulation.id;
-	pmigrate_back = PATCHVARS.getValue("Migration Back Prob")[emigrated_pops]*sapply(seqAlong(individuals), "RETURNMATRIX[emigrated_pops[applyValue], natal_pops[applyValue]];")*CLASSVARS.getValue("Migration Back Prob")[age_classes];
+	
+	// 1. Migrate back?
+	pmigrate_back = PATCHVARS.getValue("Migration Back Prob")[emigrated_pops]*CLASSVARS.getValue("Migration Back Prob")[age_classes];
+	// Thermal performance scales the probability of migrating back
 	if(QTL_TPC){
 		tpc_scale = thermal_performance(GrowthTemperatureOut[individuals.subpopulation.id], individuals.getValue('Topt'), individuals.getValue('epsilon'), asFloat(TOPT_COST), CONSTANT_AREA, asFloat(TOPT_BASELINE), asFloat(EPSILON_BASELINE));
 		pmigrate_back = pmigrate_back*tpc_scale;
 	}
-	// Can't return to a natal patch whose carrying capacity is 0 this year (as in CDMetaPOP)
-	pmigrate_back = pmigrate_back * asFloat(PATCHKS[natal_pops] > 0);
-	does_migrate = runif(length(individuals)) < pmigrate_back;
-	// Migrate back and stray
-	migrators = individuals[does_migrate & !does_stray];
-	migrator_destinations = sim.subpopulations[natal_pops[does_migrate & !does_stray]];
-	for (dest in unique(migrator_destinations)){dest.takeMigrants(migrators[migrator_destinations == dest]);}
-	strayers = individuals[does_stray];
-	strayer_destinations = sample_subpops(strayers, STRAYMATRIX);
-	for (dest in unique(strayer_destinations)){dest.takeMigrants(strayers[strayer_destinations == dest]);}
-	//print(length(migrators) + " individuals migrated back, " + length(strayers) + " strayed.");
+	goes_back = runif(n) < pmigrate_back;
+	// 2. Stray?
+	pstray = PATCHVARS.getValue("Straying Prob")[natal_pops]*CLASSVARS.getValue("Straying Prob")[age_classes];
+	does_stray = goes_back & (runif(n) < pstray);
+	// 3. Make it home?
+	preturn = sapply(seqAlong(individuals), "RETURNMATRIX[emigrated_pops[applyValue], natal_pops[applyValue]];") * asFloat(PATCHKS[natal_pops] > 0);
+	attempts = goes_back & !does_stray;
+	returns = attempts & (runif(n) < preturn);
+	fails = attempts & !returns;
+	
+	// Destinations (-1 = dies)
+	destinations = rep(-1, n);
+	destinations[returns] = natal_pops[returns];
+	if(sum(does_stray) > 0) destinations[does_stray] = stray_destinations(individuals[does_stray], "emiPop");
+	if(sum(fails) > 0){
+		if(HOMEATTEMPT == "stray_emiPop") destinations[fails] = stray_destinations(individuals[fails], "emiPop");
+		if(HOMEATTEMPT == "stray_natalPop") destinations[fails] = stray_destinations(individuals[fails], "natalPop");
+		// HOMEATTEMPT == "mortality": destinations stay -1
+	}
+	moves = goes_back & destinations >= 0;
+	strayed = moves & !returns;
+	
+	// Strayers get a new natal patch; individuals that return home or stray are no longer migrants
+	if(sum(strayed) > 0) individuals[strayed].setValuesVectorized("natal", destinations[strayed]);
+	if(sum(moves) > 0){
+		individuals[moves].setValue("migrant", F);
+		for (dest in unique(destinations[moves])){sim.subpopulations[dest].takeMigrants(individuals[moves & destinations == dest]);}
+	}
+	dies = goes_back & destinations < 0;
+	if(sum(dies) > 0) sim.killIndividuals(individuals[dies]);
+	print(n + " migrants: " + sum(returns) + " returned home, " + sum(strayed) + " strayed, " + sum(dies) + " died trying to return or stray, " + sum(!goes_back) + " stayed.");
 }
 
 late(){
@@ -1105,6 +1140,26 @@ function (integer)num_eggs(object<Individual> ind){
 			return(2);
 		}
 	}
+}
+
+// Destinations for straying individuals, following CDMetaPOP (GetProbArray 'strayer_emiPop' / 'strayer_natalPop'):
+//   "emiPop": stray matrix row of the current patch
+//   "natalPop": stray matrix row of the natal patch, only to patches reachable from the current patch
+// STRAYMATRIX already excludes non-natal grounds; patches with K <= 0 are also excluded. -1 if there is nowhere to stray to.
+function (integer)stray_destinations(object<Individual> individuals, string$ from){
+	destinations = integer(length(individuals));
+	open = asFloat(PATCHKS > 0);
+	for (i in seqAlong(individuals)){
+		current = individuals[i].subpopulation.id;
+		if(from == "emiPop") weights = drop(STRAYMATRIX[current,]) * open;
+		else{
+			weights = drop(STRAYMATRIX[individuals[i].getValue("natal"),]) * open;
+			weights[drop(STRAYMATRIX[current,]) == 0] = 0.0;
+		}
+		if(sum(weights) == 0) destinations[i] = -1;
+		else destinations[i] = sample(PATCHIDS, size = 1, weights = weights);
+	}
+	return(destinations);
 }
 
 // Sample subpopulations according to a probability matrix
@@ -1512,6 +1567,11 @@ function (void)setupGlobalsFromPopVars(object<Dictionary>$ popvars){
 	stray_matrix[,ngrounds == 0] = 0; // Can't stray to non-natal grounds
 	if (NPATCHES != "all"){stray_matrix = stray_matrix[PATCHIDS,PATCHIDS];}
 	defineGlobal("STRAYMATRIX", asFloat(stray_matrix));
+	
+	// What happens to migrants that fail to return to their natal patch (CDMetaPOP HomeAttempt)
+	if(isNULL(popvars.getValue("HomeAttempt"))) homeattempt = "mortality"; else homeattempt = asString(popvars.getValue("HomeAttempt")[0]);
+	if(!any(homeattempt == c("mortality", "stray_emiPop", "stray_natalPop"))) stop("HomeAttempt must be mortality, stray_emiPop, or stray_natalPop, but is '" + homeattempt + "'.");
+	defineGlobal("HOMEATTEMPT", homeattempt);
 	
 	// Migration back matrix (only used for the probability of returning to the natal patch, below)
 	back_matrix = asFloat(readCSV(PARAM_FOLDER + popvars.getValue('migrateback_cdmat'), colNames = asString(PATCHIDS), colTypes = paste0(rep('f', length(PATCHIDS)))).asMatrix());
