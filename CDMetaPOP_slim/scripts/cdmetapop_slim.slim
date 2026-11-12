@@ -409,7 +409,9 @@ first(){
 					if(length(QTL_ends) > 0){
 						for(qtl_i in 0:(length(QTL_starts) - 1)){
 							loci = asInteger(sample(QTL_starts[qtl_i]:QTL_ends[qtl_i], nmutations));
-							mut_hap = sample(sim.subpopulations.haplosomesForChromosomes(chrom), nmutations);
+							// Sample with replacement only if there are more mutations than haplosomes (e.g. small test populations)
+							haps = sim.subpopulations.haplosomesForChromosomes(chrom);
+							mut_hap = sample(haps, nmutations, replace = (nmutations > length(haps)));
 							for(mut_i in 0:(length(mut_hap) - 1)) mut_hap[mut_i].addNewDrawnMutation(sample(c(m2, m4), 1), loci[mut_i]);
 						}
 					}
