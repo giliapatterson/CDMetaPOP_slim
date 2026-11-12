@@ -746,10 +746,11 @@ mutationEffect(m4) { return 1.0; }
 
 late(){
 	print("Migration Out");
-	// Migration out (age 0s don't migrate out)
+	// Migration out. Age 0s (born this tick) don't migrate out: as in CDMetaPOP, where offspring are added after
+	// the migrate-out step, individuals first migrate out the year after they are born, at age 1.
 	all_inds = sim.subpopulations.individuals;
 	all_ages = age_class(all_inds, method = "age");
-	individuals = all_inds[all_ages >=0];
+	individuals = all_inds[all_ages > 0];
 	if(SIZECONTROL) age_classes = age_class(individuals, method = "size"); else age_classes = age_class(individuals, method = "age");
 	pmigrate_out = PATCHVARS.getValue("Migration Out Prob")[individuals.subpopulation.id]*CLASSVARS.getValue("Migration Out Prob")[age_classes];
 	if(QTL_TPC){
