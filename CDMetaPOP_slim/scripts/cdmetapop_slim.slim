@@ -1831,11 +1831,12 @@ function (string) mutationalOrigins(string header_string, integer focal_subpop_i
 
 
 		origin_subpop = sim.subpopulations.id;
-		Topt_count = sapply(origin_subpop, "sum(c(focal_subpop.individuals.haplosomes.mutationsOfType(m2).subpopID, sim.substitutionsOfType(m2).subpopID) == applyValue);");
+		// Counts are numbers of haplosomes: each substitution is carried by all 2N haplosomes in the focal patch
+		Topt_count = sapply(origin_subpop, "sum(focal_subpop.individuals.haplosomes.mutationsOfType(m2).subpopID == applyValue) + 2*focal_subpop.individualCount*sum(sim.substitutionsOfType(m2).subpopID == applyValue);");
 		Topt_freq = Topt_count/sum(Topt_count);
-		epsilon_count = sapply(origin_subpop, "sum(c(focal_subpop.individuals.haplosomes.mutationsOfType(m4).subpopID, sim.substitutionsOfType(m4).subpopID) == applyValue);");
+		epsilon_count = sapply(origin_subpop, "sum(focal_subpop.individuals.haplosomes.mutationsOfType(m4).subpopID == applyValue) + 2*focal_subpop.individualCount*sum(sim.substitutionsOfType(m4).subpopID == applyValue);");
 		epsilon_freq = epsilon_count/sum(epsilon_count);
-		neutral_count = sapply(origin_subpop, "sum(c(focal_subpop.individuals.haplosomes.mutationsOfType(m3).subpopID, sim.substitutionsOfType(m3).subpopID) == applyValue);");
+		neutral_count = sapply(origin_subpop, "sum(focal_subpop.individuals.haplosomes.mutationsOfType(m3).subpopID == applyValue) + 2*focal_subpop.individualCount*sum(sim.substitutionsOfType(m3).subpopID == applyValue);");
 		neutral_freq = neutral_count/sum(neutral_count);
 		Topt_mean_contribution = sapply(origin_subpop, "mean(calcAdditiveContributionOrigin(focal_subpop_id,applyValue, m2));");
 		epsilon_mean_contribution = sapply(origin_subpop, "mean(calcAdditiveContributionOrigin(focal_subpop_id,applyValue, m4));");
@@ -1874,8 +1875,8 @@ function (void) writeMutationEffects(string outfile, logical header){
 	topt_muts = unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2));
 	epsilon_subs = unique(sim.substitutionsOfType(m4));
 	epsilon_muts = unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(m4));
-	if(length(topt_subs) > 0) writeFile(outfile, paste(sapply(topt_subs, "paste0(community.tick, ',', 'T', ',', 'Topt', ',', applyValue.selectionCoeff, ',', 1.0,',', sum(sim.subpopulations.individualCount) ,',', applyValue.id);"), sep = '\n'), append = T);
-	if(length(epsilon_subs) > 0) writeFile(outfile, paste(sapply(epsilon_subs, "paste0(community.tick, ',', 'T', ',', 'epsilon', ',', applyValue.selectionCoeff, ',', 1.0,',', sum(sim.subpopulations.individualCount) ,',', applyValue.id);"), sep = '\n'), append = T);
+	if(length(topt_subs) > 0) writeFile(outfile, paste(sapply(topt_subs, "paste0(community.tick, ',', 'T', ',', 'Topt', ',', applyValue.selectionCoeff, ',', 1.0,',', 2*sum(sim.subpopulations.individualCount) ,',', applyValue.id);"), sep = '\n'), append = T);
+	if(length(epsilon_subs) > 0) writeFile(outfile, paste(sapply(epsilon_subs, "paste0(community.tick, ',', 'T', ',', 'epsilon', ',', applyValue.selectionCoeff, ',', 1.0,',', 2*sum(sim.subpopulations.individualCount) ,',', applyValue.id);"), sep = '\n'), append = T);
 	if(length(topt_muts) > 0) writeFile(outfile, paste(sapply(topt_muts, "paste0(community.tick, ',', 'F', ',', 'Topt', ',', applyValue.selectionCoeff, ',', sim.mutationFrequencies(NULL, applyValue),',', sim.mutationCounts(NULL, applyValue) ,',', applyValue.id);"), sep = '\n'), append = T);
 	if(length(epsilon_muts) > 0) writeFile(outfile, paste(sapply(epsilon_muts, "paste0(community.tick, ',', 'F', ',', 'epsilon', ',', applyValue.selectionCoeff, ',', sim.mutationFrequencies(NULL, applyValue), ',', sim.mutationCounts(NULL, applyValue) ,',', applyValue.id);"), sep = '\n'), append = T);
 	return;
