@@ -515,8 +515,9 @@ early(){
 	if(QTL){
 		inds = sim.subpopulations.individuals;
 		newborns = inds[inds.getValue("cdmp_age") == 0];
-		defineGlobal("H2_OVERALL", newborn_heritability(newborns, "phenotype", m2));
-		defineGlobal("H2_SUBPOPS", sapply(sim.subpopulations, "newborn_heritability(newborns[newborns.subpopulation == applyValue], 'phenotype', m2);"));
+		h2 = heritability_overall_and_by_patch(newborns, "phenotype", m2);
+		defineGlobal("H2_OVERALL", h2[0]);
+		defineGlobal("H2_SUBPOPS", h2[1:(length(h2) - 1)]);
 	}
 }
 
@@ -1306,12 +1307,28 @@ function (void)writeSubpopOutput(string outfile, logical header){
 		
 }
 
-// Narrow-sense heritability Va/Vp of a trait among a set of individuals (NAN if fewer than 2 or no phenotypic variance)
-function (float$) newborn_heritability(object<Individual> inds, string$ trait, object<MutationType>$ mut_type){
-	if(size(inds) < 2) return NAN;
-	vp = var(inds.getValue(trait));
+// Narrow-sense heritability Va/Vp from genetic values g and phenotypes p (NAN if fewer than 2 individuals or no phenotypic variance)
+function (float$) h2_from_values(float g, float p){
+	if(size(p) < 2) return NAN;
+	vp = var(p);
 	if(vp == 0) return NAN;
-	return calcVA(inds, mut_type)/vp;
+	return var(g)/vp;
+}
+
+// Narrow-sense heritability Va/Vp of a trait among inds: overall first, then one value per patch (sim.subpopulations order).
+// Va is the variance of the summed effects of mut_type, as in calcVA(). Genetic values, phenotypes and patches are looked up
+// once and then subset for each patch.
+function (float) heritability_overall_and_by_patch(object<Individual> inds, string$ trait, object<MutationType>$ mut_type){
+	if(size(inds) == 0) return rep(NAN, 1 + length(sim.subpopulations));
+	g = inds.sumOfMutationsOfType(mut_type);
+	p = asFloat(inds.getValue(trait));
+	patch = inds.subpopulation.id;
+	h2 = h2_from_values(g, p);
+	for (sp in sim.subpopulations){
+		in_patch = (patch == sp.id);
+		h2 = c(h2, h2_from_values(g[in_patch], p[in_patch]));
+	}
+	return h2;
 }
 
 // Heritability value for output: 'NA' if it could not be calculated
