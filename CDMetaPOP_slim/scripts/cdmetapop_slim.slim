@@ -649,6 +649,8 @@ reproduction(NULL, "F") {
 
 // Mutation (applies to offspring in every patch)
 modifyChild() {
+	// Nothing to do without microsatellite mutation (this callback runs for every offspring)
+	if(MUTRATE * NLOCI == 0) return T;
 	for (genome in child.haplosomes){
 		if(MUTRATE * NLOCI > 0) mutCount = rpois(1, MUTRATE * NLOCI);
 		else mutCount = 0;
