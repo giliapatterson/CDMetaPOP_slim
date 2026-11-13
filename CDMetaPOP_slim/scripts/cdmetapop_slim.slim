@@ -571,8 +571,8 @@ first(){
 	
 	defineGlobal("N_INITIAL", sim.subpopulations.individualCount);
 	ages = CLASSVARS.getValue("Age class");
-	defineGlobal("N_INITIAL_AGE", sapply(ages, "sum(age_class(sim.subpopulations.individuals, 'age') == applyValue);"));
-	if (SIZECONTROL) defineGlobal("N_INITIAL_CLASS", sapply(ages, "sum(age_class(sim.subpopulations.individuals, 'size') == applyValue);")); else defineGlobal("N_INITIAL_CLASS", sapply(ages, "sum(age_class(sim.subpopulations.individuals, 'age') == applyValue);"));
+	defineGlobal("N_INITIAL_AGE", count_age_classes(sim.subpopulations.individuals, 'age', ages));
+	if (SIZECONTROL) defineGlobal("N_INITIAL_CLASS", count_age_classes(sim.subpopulations.individuals, 'size', ages)); else defineGlobal("N_INITIAL_CLASS", count_age_classes(sim.subpopulations.individuals, 'age', ages));
 	defineGlobal("EGGLAYEVENTS", 0);
 	defineGlobal("BIRTHS", integer(length(sim.subpopulations)));
 	defineGlobal("EGGDEATHS", integer(length(sim.subpopulations)));
@@ -714,7 +714,7 @@ early(){
 	}
 	
 	ages = CLASSVARS.getValue("Age class")[CLASSVARS.getValue("Age class") != 0];
-	if(SIZECONTROL) defineGlobal("N_GROWTHBACK", c(0, sapply(ages, "sum(age_class(sim.subpopulations.individuals, 'size') == applyValue);"))); else defineGlobal("N_GROWTHBACK", c(0, sapply(ages, "sum(age_class(sim.subpopulations.individuals, 'age') == applyValue);")));
+	if(SIZECONTROL) defineGlobal("N_GROWTHBACK", c(0, count_age_classes(sim.subpopulations.individuals, 'size', ages))); else defineGlobal("N_GROWTHBACK", c(0, count_age_classes(sim.subpopulations.individuals, 'age', ages)));
 
 
 	// CDMetaPOP output here
@@ -778,7 +778,7 @@ late(){
 late(){
 	defineGlobal("N1", sim.subpopulations.individualCount);
 	ages = CLASSVARS.getValue("Age class");
-	if (SIZECONTROL) defineGlobal("N1_AGE", sapply(ages, "sum(age_class(sim.subpopulations.individuals, 'size') == applyValue);")); else defineGlobal("N1_AGE", sapply(ages, "sum(age_class(sim.subpopulations.individuals, 'age') == applyValue);"));
+	if (SIZECONTROL) defineGlobal("N1_AGE", count_age_classes(sim.subpopulations.individuals, 'size', ages)); else defineGlobal("N1_AGE", count_age_classes(sim.subpopulations.individuals, 'age', ages));
 	
 	// Density dependent mortality
 	if(POPVARS.getValue("popmodel") == "packing"){
@@ -1217,62 +1217,32 @@ function (void)grow(string step){
 	return;
 }
 
-// Calculate probability of maturity based on age
-function (float)prob_mature_age(string sex, integer age){
-	age_i = which(CLASSVARS.getValue("Age class") == age);
-	if (sex == "F"){
-		if(age >= POPVARS.getValue("mature_age_f")){
-			return(1.0);
-		}
-		else{
-			p_mature = CLASSVARS.getValue("Maturation_F")[age_i];
-		}
-	}
-	if (sex == "M"){
-		if(age >= POPVARS.getValue("mature_age_m")){
-			return(1.0);
-		}
-		else{
-			p_mature = CLASSVARS.getValue("Maturation_M")[age_i];
-		}
-	}
-	return(asFloat(p_mature));
+// Number of individuals in each of the given age classes (age_class() with the given method)
+function (integer) count_age_classes(object<Individual> individuals, string$ method, integer classes){
+	individual_classes = age_class(individuals, method);
+	return sapply(classes, "sum(individual_classes == applyValue);");
 }
 
-// Calculate probability of maturity based on size
-function (float)prob_mature_size(float size, string sex, integer age){
-	if (sex == "F"){
-		if(age >= POPVARS.getValue("mature_age_f")){
-			return(1.0);
-		}
-		else{
-			intercept = POPVARS.getValue("mature_eqn_int_f");
-			slope = POPVARS.getValue("mature_eqn_slope_f");
-		}
-	}
-	if (sex == "M"){
-		if(age >= POPVARS.getValue("mature_age_m")){
-			return(1.0);
-		}
-		else{
-			intercept = POPVARS.getValue("mature_eqn_int_m");
-			slope = POPVARS.getValue("mature_eqn_slope_m");
-		}
-	}
-	p_mature = exp(intercept + slope*size) / (1 + exp(intercept + slope*size));
-	return(p_mature);
-}
-
+// Set maturity (tagL0) of individuals. Individuals at or above the sex's age of maturity
+// (mature_age_f, mature_age_m) mature; younger ones mature with a probability that depends on size (SIZECONTROL:
+// logistic mature_eqn_int/mature_eqn_slope) or age (Maturation_F, Maturation_M in ClassVars).
+// Calculated for all individuals at once.
 function (void)mature(object <Individual> individuals){
-	// Set maturity
+	ages = age_class(individuals, 'age');
+	females = (individuals.sex == "F");
 	if (SIZECONTROL){
-		pmature = sapply(individuals, "prob_mature_size(applyValue.getValue('size'), applyValue.sex, age_class(applyValue, 'age'));");
+		sizes = individuals.getValue('size');
+		intercept = ifelse(females, POPVARS.getValue("mature_eqn_int_f"), POPVARS.getValue("mature_eqn_int_m"));
+		slope = ifelse(females, POPVARS.getValue("mature_eqn_slope_f"), POPVARS.getValue("mature_eqn_slope_m"));
+		p_young = exp(intercept + slope*sizes) / (1 + exp(intercept + slope*sizes));
 	}
 	else{
-		pmature = sapply(individuals, "prob_mature_age(applyValue.sex, age_class(applyValue, 'age'));");
+		age_i = match(ages, CLASSVARS.getValue("Age class"));
+		p_young = ifelse(females, asFloat(CLASSVARS.getValue("Maturation_F")[age_i]), asFloat(CLASSVARS.getValue("Maturation_M")[age_i]));
 	}
+	mature_age = ifelse(females, POPVARS.getValue("mature_age_f"), POPVARS.getValue("mature_age_m"));
+	pmature = ifelse(ages >= mature_age, 1.0, p_young);
 	individuals.tagL0 = runif(length(individuals)) < pmature;
-	//print(mean(individuals.tagL0) + " prop matured");
 	return;
 }
 
