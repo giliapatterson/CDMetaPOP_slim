@@ -1309,6 +1309,21 @@ function (*) heritability_output(float$ h2){
 	return h2;
 }
 
+// Nucleotide diversity (pi) of the individuals in subpops, averaged over the autosomes, for mutations of the given types.
+// Same calculation as calcPi() (SLiM) for each chromosome, counting each segregating mutation once:
+//   pi = sum over mutations of k(n - k) / (n(n - 1)/2) / chromosome length
+// where k is the number of the n haplosomes (2 per individual) that carry the mutation.
+// Done for all chromosomes at once because calcPi() is slow (about 3 ms per call, even with no mutations).
+function (float$) meanPi(object<Subpopulation> subpops, object<MutationType> mut_types){
+	chromosomes = sim.chromosomesOfType("A");
+	n = 2*sum(subpops.individualCount);
+	muts = sim.mutations;
+	muts = muts[(match(muts.mutationType.id, mut_types.id) >= 0) & (muts.chromosome.type == "A")];
+	if(size(muts) == 0) return 0.0;
+	k = sim.mutationCounts(subpops, muts);
+	return sum(k*(n - k) / (n*(n - 1)/2) / muts.chromosome.length) / length(chromosomes);
+}
+
 function (void) writeQTLOutputOverall(string outfile, logical header){
 	overall_header = "year,K,popsize,phenotypic_variance,Va,Ve,heritability,qtl_alleles,avg_effect_size,neutral_pi,overall_pi";
 	if(header){
@@ -1326,9 +1341,8 @@ function (void) writeQTLOutputOverall(string outfile, logical header){
 		heritability = heritability_output(H2_OVERALL);
 		qtl_alleles = length(unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2)));
 		avg_effect_size = mean(abs(c(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2).selectionCoeff, sim.substitutionsOfType(m2).selectionCoeff)));
-		chromosomes = sim.chromosomesOfType("A");
-		neutral_pi = mean(sapply(chromosomes, "calcPi(sim.subpopulations.haplosomesForChromosomes(applyValue), sim.subpopulations.haplosomesForChromosomes(applyValue).mutationsOfType(m3));"));
-		overall_pi = mean(sapply(chromosomes, "calcPi(sim.subpopulations.haplosomesForChromosomes(applyValue), c(sim.subpopulations.haplosomesForChromosomes(applyValue).mutationsOfType(m3), sim.subpopulations.haplosomesForChromosomes(applyValue).mutationsOfType(m2)));"));
+		neutral_pi = meanPi(sim.subpopulations, m3);
+		overall_pi = meanPi(sim.subpopulations, c(m3, m2));
 	}
 	else{
 		phenotypic_variance = 'NA';
@@ -1366,9 +1380,8 @@ function (void) writeQTLOutputSubpops(string outfile, logical header){
 			heritability = heritability_output(H2_SUBPOPS[PatchID]);
 			qtl_alleles = length(unique(subpop.individuals.haplosomes.mutationsOfType(m2)));
 			avg_effect_size = mean(abs(c(subpop.individuals.haplosomes.mutationsOfType(m2).selectionCoeff, sim.substitutionsOfType(m2).selectionCoeff)));
-			chromosomes = sim.chromosomesOfType("A");
-			neutral_pi = mean(sapply(chromosomes, "calcPi(subpop.haplosomesForChromosomes(applyValue), subpop.haplosomesForChromosomes(applyValue).mutationsOfType(m3));"));
-		overall_pi = mean(sapply(chromosomes, "calcPi(subpop.haplosomesForChromosomes(applyValue), c(subpop.haplosomesForChromosomes(applyValue).mutationsOfType(m3), subpop.haplosomesForChromosomes(applyValue).mutationsOfType(m2)));"));
+			neutral_pi = meanPi(subpop, m3);
+			overall_pi = meanPi(subpop, c(m3, m2));
 		}
 		else{
 			avg_phenotype = 'NA';
