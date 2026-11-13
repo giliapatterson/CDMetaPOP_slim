@@ -1813,24 +1813,49 @@ function (void) writeQTLOutputSubpops(string outfile, logical header, logical qt
 	return;
 }
 
-function (float) calcAdditiveOriginIndividual(io<Individual> individual, integer origin_subpop_id, io<MutationType>$ mutType){
-	all_muts = c(individual.haplosomes.mutationsOfType(mutType));
-	origin_muts = all_muts[all_muts.subpopID == origin_subpop_id];
-	all_subs = sim.substitutionsOfType(mutType);
-	origin_subs = all_subs[all_subs.subpopID == origin_subpop_id];
-	sum_of_muts = sum(origin_muts.selectionCoeff) + 2*sum(origin_subs.selectionCoeff); // substitutions are homozygous in every individual
-	return(sum_of_muts);
+// Number of copies, among the haplosomes of focal_subpop, of mutations of mutType that arose in each patch (one value per patch,
+// in sim.subpopulations order). Each substitution is carried by all 2N haplosomes.
+function (integer) countByOrigin(object<Subpopulation>$ focal_subpop, object<MutationType>$ mutType){
+	n_origins = length(sim.subpopulations);
+	ids = focal_subpop.haplosomes.mutationsOfType(mutType).subpopID;
+	sub_ids = sim.substitutionsOfType(mutType).subpopID;
+	ids = ids[ids >= 0 & ids < n_origins];
+	sub_ids = sub_ids[sub_ids >= 0 & sub_ids < n_origins];
+	return tabulate(ids, n_origins - 1) + 2*focal_subpop.individualCount*tabulate(sub_ids, n_origins - 1);
 }
 
-function (float) calcAdditiveContributionOrigin(integer focal_subpop_id, integer origin_subpop_id, io<MutationType>$ mutType){
-	focal_subpop = sim.subpopulations[focal_subpop_id];
-	additive_contributions = sapply(focal_subpop.individuals, "calcAdditiveOriginIndividual(applyValue, origin_subpop_id, mutType);");
-	return(additive_contributions);
+// Additive contribution to the trait of the mutations of mutType that arose in each patch, for each individual in focal_subpop:
+// a matrix with a row per individual and a column per origin patch (sim.subpopulations order). A mutation counts once per copy
+// and a substitution twice (substitutions are homozygous in every individual). Calculated for all individuals and patches at once:
+// (copies of each mutation in each individual) x (effect of each mutation, in the column of its origin patch).
+function (float) additiveContributionsByOrigin(object<Subpopulation>$ focal_subpop, object<MutationType>$ mutType){
+	inds = focal_subpop.individuals;
+	n_inds = length(inds);
+	n_origins = length(sim.subpopulations);
+	contributions = matrix(float(n_inds*n_origins), nrow = n_inds);
+	haps = inds.haplosomes;
+	muts = haps.mutationsOfType(mutType);
+	if(length(muts) > 0){
+		unique_muts = unique(muts, preserveOrder = F);
+		n_muts = length(unique_muts);
+		// Individual (index in focal_subpop) carrying each copy
+		owners = repEach(haps.individual.index, haps.countOfMutationsOfType(mutType));
+		copies = matrix(asFloat(tabulate(owners*n_muts + match(muts, unique_muts), n_inds*n_muts - 1)), nrow = n_muts);
+		origins = unique_muts.subpopID;
+		known = which(origins >= 0 & origins < n_origins);
+		effects = float(n_muts*n_origins);
+		effects[known + n_muts*origins[known]] = unique_muts.selectionCoeff[known];
+		contributions = matrixMult(t(copies), matrix(effects, nrow = n_muts));
+	}
+	subs = sim.substitutionsOfType(mutType);
+	sub_effects = sapply(sim.subpopulations.id, "sum(subs.selectionCoeff[subs.subpopID == applyValue]);");
+	return contributions + matrix(repEach(2*sub_effects, n_inds), nrow = n_inds);
 }
 
 function (string) mutationalOrigins(string header_string, integer focal_subpop_id){
 	focal_subpop = sim.subpopulations[focal_subpop_id];
-	if(focal_subpop.individualCount > 0 & length(focal_subpop.individuals.haplosomes.mutations) > 0){
+	// Any mutations in the focal patch? (mutationCounts() is much faster than collecting every copy of every mutation)
+	if(focal_subpop.individualCount > 0 & sum(sim.mutationCounts(focal_subpop)) > 0){
 		// Origin-tick frequencies only exist if mutation_origin_year was given; otherwise those columns are NA
 		if(MUTATION_ORIGIN & community.tick > MUTATION_ORIGIN_TICK){
 			all_mutations = unique(focal_subpop.haplosomes.mutationsOfType(m2));
@@ -1914,16 +1939,19 @@ function (string) mutationalOrigins(string header_string, integer focal_subpop_i
 
 		origin_subpop = sim.subpopulations.id;
 		// Counts are numbers of haplosomes: each substitution is carried by all 2N haplosomes in the focal patch
-		Topt_count = sapply(origin_subpop, "sum(focal_subpop.individuals.haplosomes.mutationsOfType(m2).subpopID == applyValue) + 2*focal_subpop.individualCount*sum(sim.substitutionsOfType(m2).subpopID == applyValue);");
+		Topt_count = countByOrigin(focal_subpop, m2);
 		Topt_freq = Topt_count/sum(Topt_count);
-		epsilon_count = sapply(origin_subpop, "sum(focal_subpop.individuals.haplosomes.mutationsOfType(m4).subpopID == applyValue) + 2*focal_subpop.individualCount*sum(sim.substitutionsOfType(m4).subpopID == applyValue);");
+		epsilon_count = countByOrigin(focal_subpop, m4);
 		epsilon_freq = epsilon_count/sum(epsilon_count);
-		neutral_count = sapply(origin_subpop, "sum(focal_subpop.individuals.haplosomes.mutationsOfType(m3).subpopID == applyValue) + 2*focal_subpop.individualCount*sum(sim.substitutionsOfType(m3).subpopID == applyValue);");
+		neutral_count = countByOrigin(focal_subpop, m3);
 		neutral_freq = neutral_count/sum(neutral_count);
-		Topt_mean_contribution = sapply(origin_subpop, "mean(calcAdditiveContributionOrigin(focal_subpop_id,applyValue, m2));");
-		epsilon_mean_contribution = sapply(origin_subpop, "mean(calcAdditiveContributionOrigin(focal_subpop_id,applyValue, m4));");
-		Topt_VA = sapply(origin_subpop, "var(calcAdditiveContributionOrigin(focal_subpop_id,applyValue, m2));");
-		epsilon_VA = sapply(origin_subpop, "var(calcAdditiveContributionOrigin(focal_subpop_id,applyValue, m4));");
+		// Mean and variance among individuals in the focal patch of the additive contribution of mutations from each origin patch
+		Topt_contributions = additiveContributionsByOrigin(focal_subpop, m2);
+		epsilon_contributions = additiveContributionsByOrigin(focal_subpop, m4);
+		Topt_mean_contribution = apply(Topt_contributions, 1, "mean(applyValue);");
+		epsilon_mean_contribution = apply(epsilon_contributions, 1, "mean(applyValue);");
+		Topt_VA = apply(Topt_contributions, 1, "var(applyValue);");
+		epsilon_VA = apply(epsilon_contributions, 1, "var(applyValue);");
 		origin_temp = GrowthTemperatureBack[origin_subpop];
 		tick = rep(community.tick, length(origin_subpop));
 		subpop = rep(focal_subpop.id, length(origin_subpop));
