@@ -1640,6 +1640,13 @@ function (*) heritability_output(float$ h2){
 	return h2;
 }
 
+// Mean for output: 'NA' if there are no values. (mean() of an empty vector is NULL, which would
+// leave the value out of the output line and shift the columns after it.)
+function (*) mean_or_NA(numeric x){
+	if(size(x) == 0) return 'NA';
+	return mean(x);
+}
+
 // Nucleotide diversity (pi) of the individuals in subpops, averaged over the autosomes, for mutations of the given types.
 // Same calculation as calcPi() (SLiM) for each chromosome, counting each segregating mutation once:
 //   pi = sum over mutations of k(n - k) / (n(n - 1)/2) / chromosome length
@@ -1672,7 +1679,7 @@ function (void) writeQTLOutputOverall(string outfile, logical header, logical qt
 		// Heritability is calculated from this tick's newborns, before selection (see early())
 		heritability = heritability_output(H2_OVERALL);
 		qtl_alleles = length(unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2)));
-		avg_effect_size = mean(abs(c(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2).selectionCoeff, sim.substitutionsOfType(m2).selectionCoeff)));
+		avg_effect_size = mean_or_NA(abs(c(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2).selectionCoeff, sim.substitutionsOfType(m2).selectionCoeff)));
 		neutral_pi = meanPi(sim.subpopulations, m3);
 		overall_pi = meanPi(sim.subpopulations, c(m3, m2));
 		print("QTL alleles: " + qtl_alleles);
@@ -1684,13 +1691,13 @@ function (void) writeQTLOutputOverall(string outfile, logical header, logical qt
 		// Heritability is calculated from this tick's newborns, before selection (see early())
 		Topt_heritability = heritability_output(H2_TOPT_OVERALL);
 		Topt_alleles = length(unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2)));
-		Topt_avg_effect_size = mean(abs(c(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2).selectionCoeff, sim.substitutionsOfType(m2).selectionCoeff)));
+		Topt_avg_effect_size = mean_or_NA(abs(c(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2).selectionCoeff, sim.substitutionsOfType(m2).selectionCoeff)));
 		epsilon_variance = var(sim.subpopulations.individuals.getValue('epsilon'));
 		epsilon_Va = calcVA(sim.subpopulations.individuals, m4);
 		epsilon_Ve = var(sim.subpopulations.individuals.getValue('epsilon') - sim.subpopulations.individuals.sumOfMutationsOfType(m4));
 		epsilon_heritability = heritability_output(H2_EPSILON_OVERALL);
 		epsilon_alleles = length(unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(m4)));
-		epsilon_avg_effect_size = mean(abs(c(sim.subpopulations.individuals.haplosomes.mutationsOfType(m4).selectionCoeff, sim.substitutionsOfType(m4).selectionCoeff)));
+		epsilon_avg_effect_size = mean_or_NA(abs(c(sim.subpopulations.individuals.haplosomes.mutationsOfType(m4).selectionCoeff, sim.substitutionsOfType(m4).selectionCoeff)));
 		neutral_pi = meanPi(sim.subpopulations, m3);
 		overall_pi = meanPi(sim.subpopulations, c(m3, m2, m4));
 	}
@@ -1742,7 +1749,7 @@ function (void) writeQTLOutputSubpops(string outfile, logical header, logical qt
 			// Heritability is calculated from this tick's newborns in the patch, before selection (see early())
 			heritability = heritability_output(H2_SUBPOPS[PatchID]);
 			qtl_alleles = length(unique(subpop.individuals.haplosomes.mutationsOfType(m2)));
-			avg_effect_size = mean(abs(c(subpop.individuals.haplosomes.mutationsOfType(m2).selectionCoeff, sim.substitutionsOfType(m2).selectionCoeff)));
+			avg_effect_size = mean_or_NA(abs(c(subpop.individuals.haplosomes.mutationsOfType(m2).selectionCoeff, sim.substitutionsOfType(m2).selectionCoeff)));
 			neutral_pi = meanPi(subpop, m3);
 			overall_pi = meanPi(subpop, c(m3, m2));
 		}
@@ -1754,14 +1761,14 @@ function (void) writeQTLOutputSubpops(string outfile, logical header, logical qt
 			// Heritability is calculated from this tick's newborns in the patch, before selection (see early())
 			Topt_heritability = heritability_output(H2_TOPT_SUBPOPS[PatchID]);
 			Topt_alleles = length(unique(subpop.individuals.haplosomes.mutationsOfType(m2)));
-			Topt_avg_effect_size = mean(abs(c(subpop.individuals.haplosomes.mutationsOfType(m2).selectionCoeff, sim.substitutionsOfType(m2).selectionCoeff)));
+			Topt_avg_effect_size = mean_or_NA(abs(c(subpop.individuals.haplosomes.mutationsOfType(m2).selectionCoeff, sim.substitutionsOfType(m2).selectionCoeff)));
 			avg_epsilon = mean(subpop.individuals.getValue('epsilon'));
 			epsilon_variance = var(subpop.individuals.getValue('epsilon'));
 			epsilon_Va = calcVA(subpop.individuals, m4);
 			epsilon_Ve = var(subpop.individuals.getValue('epsilon') - subpop.individuals.sumOfMutationsOfType(m4));
 			epsilon_heritability = heritability_output(H2_EPSILON_SUBPOPS[PatchID]);
 			epsilon_alleles = length(unique(subpop.individuals.haplosomes.mutationsOfType(m4)));
-			epsilon_avg_effect_size = mean(abs(c(subpop.individuals.haplosomes.mutationsOfType(m4).selectionCoeff, sim.substitutionsOfType(m4).selectionCoeff)));
+			epsilon_avg_effect_size = mean_or_NA(abs(c(subpop.individuals.haplosomes.mutationsOfType(m4).selectionCoeff, sim.substitutionsOfType(m4).selectionCoeff)));
 			neutral_pi = meanPi(subpop, m3);
 			overall_pi = meanPi(subpop, c(m3, m2, m4));
 		}
