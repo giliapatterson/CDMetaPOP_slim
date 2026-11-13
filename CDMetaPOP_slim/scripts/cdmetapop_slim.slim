@@ -1566,6 +1566,15 @@ function (void)setupGlobalsFromPopVars(object<Dictionary>$ popvars){
 
 }
 
+// Expected heterozygosity at the microsatellite loci, as in CDMetaPOP (GetMetrics): 1 - (sum of squared allele frequencies)/loci.
+// Each allele at each locus is an m1 mutation, and every haplosome carries one allele per locus. (calcHeterozygosity()
+// would give 2*sum(p(1 - p)) per chromosome position: twice this for loci where every allele is a mutation, divided by the
+// whole chromosome length rather than the number of loci.)
+function (float$) msatHe(object<Subpopulation> subpops){
+	p = sim.mutationFrequencies(subpops, sim.mutationsOfType(m1));
+	return 1.0 - sum(p^2)/NLOCI;
+}
+
 function (void)writeSubpopOutput(string outfile, logical header){
 	if(header){
 		writeFile(outfile, "Year,K,GrowthRate,N_Initial,PopSizes_Mean,PopSizes_Std,N_Females,N_Males,N_MatureFemales,N_MatureMales,MatureCount,ImmatureCount,EggLayEvents,Births,EggDeaths,N_beforePacking_AddAge0s,PackingDeaths_Emigration,PackingDeaths_Immigration,N_Emigration,Alleles,He,Ho");
@@ -1594,13 +1603,13 @@ function (void)writeSubpopOutput(string outfile, logical header){
 	if(NLOCI > 0){
 		nalleles_total = length(unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(m1)));
 		nalleles = sapply(sim.subpopulations, "length(unique(applyValue.individuals.haplosomes.mutationsOfType(m1)));");
-		He_total = calcHeterozygosity(sim.subpopulations.individuals.haplosomes, sim.subpopulations.individuals.haplosomes.mutationsOfType(m1));
+		He_total = msatHe(sim.subpopulations);
 		Ho_total = mean(sapply(sim.subpopulations.individuals, "calcPairHeterozygosity(applyValue.haplosomes[0], applyValue.haplosomes[1], start = 0, end = NLOCI - 1, infiniteSites=F);"));
 		He_subpops = float(length(sim.subpopulations));
 		Ho_subpops = float(length(sim.subpopulations));
 		for (subpop in sim.subpopulations){
 			if (subpop.individualCount > 0){
-				He_subpops[subpop.id] = calcHeterozygosity(subpop.individuals.haplosomes, subpop.individuals.haplosomes.mutationsOfType(m1));
+				He_subpops[subpop.id] = msatHe(subpop);
 				Ho_subpops[subpop.id] = mean(sapply(subpop.individuals, "calcPairHeterozygosity(applyValue.haplosomes[0], applyValue.haplosomes[1], start = 0, end = NLOCI - 1, infiniteSites=F);"));
 			}
 			else{
