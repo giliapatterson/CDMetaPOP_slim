@@ -367,8 +367,8 @@ first(){
 	
 	defineGlobal("N_INITIAL", sim.subpopulations.individualCount);
 	ages = CLASSVARS.getValue("Age class");
-	defineGlobal("N_INITIAL_AGE", sapply(ages, "sum(age_class(sim.subpopulations.individuals, 'age') == applyValue);"));
-	if (SIZECONTROL) defineGlobal("N_INITIAL_CLASS", sapply(ages, "sum(age_class(sim.subpopulations.individuals, 'size') == applyValue);")); else defineGlobal("N_INITIAL_CLASS", sapply(ages, "sum(age_class(sim.subpopulations.individuals, 'age') == applyValue);"));
+	defineGlobal("N_INITIAL_AGE", count_age_classes(sim.subpopulations.individuals, 'age', ages));
+	if (SIZECONTROL) defineGlobal("N_INITIAL_CLASS", count_age_classes(sim.subpopulations.individuals, 'size', ages)); else defineGlobal("N_INITIAL_CLASS", count_age_classes(sim.subpopulations.individuals, 'age', ages));
 	defineGlobal("EGGLAYEVENTS", 0);
 	defineGlobal("BIRTHS", integer(length(sim.subpopulations)));
 	defineGlobal("EGGDEATHS", integer(length(sim.subpopulations)));
@@ -437,6 +437,8 @@ reproduction(NULL, "F") {
 
 // Mutation (applies to offspring in every patch)
 modifyChild() {
+	// Nothing to do without microsatellite mutation (this callback runs for every offspring)
+	if(MUTRATE * NLOCI == 0) return T;
 	for (genome in child.haplosomes){
 		if(MUTRATE * NLOCI > 0) mutCount = rpois(1, MUTRATE * NLOCI);
 		else mutCount = 0;
@@ -500,7 +502,7 @@ early(){
 	}
 	
 	ages = CLASSVARS.getValue("Age class")[CLASSVARS.getValue("Age class") != 0];
-	if(SIZECONTROL) defineGlobal("N_GROWTHBACK", c(0, sapply(ages, "sum(age_class(sim.subpopulations.individuals, 'size') == applyValue);"))); else defineGlobal("N_GROWTHBACK", c(0, sapply(ages, "sum(age_class(sim.subpopulations.individuals, 'age') == applyValue);")));
+	if(SIZECONTROL) defineGlobal("N_GROWTHBACK", c(0, count_age_classes(sim.subpopulations.individuals, 'size', ages))); else defineGlobal("N_GROWTHBACK", c(0, count_age_classes(sim.subpopulations.individuals, 'age', ages)));
 
 	
 	// CDMetaPOP output here
@@ -513,8 +515,9 @@ early(){
 	if(QTL){
 		inds = sim.subpopulations.individuals;
 		newborns = inds[inds.getValue("cdmp_age") == 0];
-		defineGlobal("H2_OVERALL", newborn_heritability(newborns, "phenotype", m2));
-		defineGlobal("H2_SUBPOPS", sapply(sim.subpopulations, "newborn_heritability(newborns[newborns.subpopulation == applyValue], 'phenotype', m2);"));
+		h2 = heritability_overall_and_by_patch(newborns, "phenotype", m2);
+		defineGlobal("H2_OVERALL", h2[0]);
+		defineGlobal("H2_SUBPOPS", h2[1:(length(h2) - 1)]);
 	}
 }
 
@@ -547,7 +550,7 @@ late(){
 late(){
 	defineGlobal("N1", sim.subpopulations.individualCount);
 	ages = CLASSVARS.getValue("Age class");
-	if (SIZECONTROL) defineGlobal("N1_AGE", sapply(ages, "sum(age_class(sim.subpopulations.individuals, 'size') == applyValue);")); else defineGlobal("N1_AGE", sapply(ages, "sum(age_class(sim.subpopulations.individuals, 'age') == applyValue);"));
+	if (SIZECONTROL) defineGlobal("N1_AGE", count_age_classes(sim.subpopulations.individuals, 'size', ages)); else defineGlobal("N1_AGE", count_age_classes(sim.subpopulations.individuals, 'age', ages));
 	
 	// Density dependent mortality
 	if(POPVARS.getValue("popmodel") == "packing"){
@@ -927,62 +930,32 @@ function (void)grow(string step){
 	return;
 }
 
-// Calculate probability of maturity based on age
-function (float)prob_mature_age(string sex, integer age){
-	age_i = which(CLASSVARS.getValue("Age class") == age);
-	if (sex == "F"){
-		if(age >= POPVARS.getValue("mature_age_f")){
-			return(1.0);
-		}
-		else{
-			p_mature = CLASSVARS.getValue("Maturation_F")[age_i];
-		}
-	}
-	if (sex == "M"){
-		if(age >= POPVARS.getValue("mature_age_m")){
-			return(1.0);
-		}
-		else{
-			p_mature = CLASSVARS.getValue("Maturation_M")[age_i];
-		}
-	}
-	return(asFloat(p_mature));
+// Number of individuals in each of the given age classes (age_class() with the given method)
+function (integer) count_age_classes(object<Individual> individuals, string$ method, integer classes){
+	individual_classes = age_class(individuals, method);
+	return sapply(classes, "sum(individual_classes == applyValue);");
 }
 
-// Calculate probability of maturity based on size
-function (float)prob_mature_size(float size, string sex, integer age){
-	if (sex == "F"){
-		if(age >= POPVARS.getValue("mature_age_f")){
-			return(1.0);
-		}
-		else{
-			intercept = POPVARS.getValue("mature_eqn_int_f");
-			slope = POPVARS.getValue("mature_eqn_slope_f");
-		}
-	}
-	if (sex == "M"){
-		if(age >= POPVARS.getValue("mature_age_m")){
-			return(1.0);
-		}
-		else{
-			intercept = POPVARS.getValue("mature_eqn_int_m");
-			slope = POPVARS.getValue("mature_eqn_slope_m");
-		}
-	}
-	p_mature = exp(intercept + slope*size) / (1 + exp(intercept + slope*size));
-	return(p_mature);
-}
-
+// Set maturity (tagL0) of individuals. Individuals at or above the sex's age of maturity
+// (mature_age_f, mature_age_m) mature; younger ones mature with a probability that depends on size (SIZECONTROL:
+// logistic mature_eqn_int/mature_eqn_slope) or age (Maturation_F, Maturation_M in ClassVars).
+// Calculated for all individuals at once.
 function (void)mature(object <Individual> individuals){
-	// Set maturity
+	ages = age_class(individuals, 'age');
+	females = (individuals.sex == "F");
 	if (SIZECONTROL){
-		pmature = sapply(individuals, "prob_mature_size(applyValue.getValue('size'), applyValue.sex, age_class(applyValue, 'age'));");
+		sizes = individuals.getValue('size');
+		intercept = ifelse(females, POPVARS.getValue("mature_eqn_int_f"), POPVARS.getValue("mature_eqn_int_m"));
+		slope = ifelse(females, POPVARS.getValue("mature_eqn_slope_f"), POPVARS.getValue("mature_eqn_slope_m"));
+		p_young = exp(intercept + slope*sizes) / (1 + exp(intercept + slope*sizes));
 	}
 	else{
-		pmature = sapply(individuals, "prob_mature_age(applyValue.sex, age_class(applyValue, 'age'));");
+		age_i = match(ages, CLASSVARS.getValue("Age class"));
+		p_young = ifelse(females, asFloat(CLASSVARS.getValue("Maturation_F")[age_i]), asFloat(CLASSVARS.getValue("Maturation_M")[age_i]));
 	}
+	mature_age = ifelse(females, POPVARS.getValue("mature_age_f"), POPVARS.getValue("mature_age_m"));
+	pmature = ifelse(ages >= mature_age, 1.0, p_young);
 	individuals.tagL0 = runif(length(individuals)) < pmature;
-	//print(mean(individuals.tagL0) + " prop matured");
 	return;
 }
 	
@@ -1304,12 +1277,28 @@ function (void)writeSubpopOutput(string outfile, logical header){
 		
 }
 
-// Narrow-sense heritability Va/Vp of a trait among a set of individuals (NAN if fewer than 2 or no phenotypic variance)
-function (float$) newborn_heritability(object<Individual> inds, string$ trait, object<MutationType>$ mut_type){
-	if(size(inds) < 2) return NAN;
-	vp = var(inds.getValue(trait));
+// Narrow-sense heritability Va/Vp from genetic values g and phenotypes p (NAN if fewer than 2 individuals or no phenotypic variance)
+function (float$) h2_from_values(float g, float p){
+	if(size(p) < 2) return NAN;
+	vp = var(p);
 	if(vp == 0) return NAN;
-	return calcVA(inds, mut_type)/vp;
+	return var(g)/vp;
+}
+
+// Narrow-sense heritability Va/Vp of a trait among inds: overall first, then one value per patch (sim.subpopulations order).
+// Va is the variance of the summed effects of mut_type, as in calcVA(). Genetic values, phenotypes and patches are looked up
+// once and then subset for each patch.
+function (float) heritability_overall_and_by_patch(object<Individual> inds, string$ trait, object<MutationType>$ mut_type){
+	if(size(inds) == 0) return rep(NAN, 1 + length(sim.subpopulations));
+	g = inds.sumOfMutationsOfType(mut_type);
+	p = asFloat(inds.getValue(trait));
+	patch = inds.subpopulation.id;
+	h2 = h2_from_values(g, p);
+	for (sp in sim.subpopulations){
+		in_patch = (patch == sp.id);
+		h2 = c(h2, h2_from_values(g[in_patch], p[in_patch]));
+	}
+	return h2;
 }
 
 // Heritability value for output: 'NA' if it could not be calculated
