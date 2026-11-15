@@ -586,69 +586,93 @@ first(){
 	print("Reproduction");
 }
 
+// Reproduction, once per tick for all patches: each mature female mates with one mature male and lays eggs.
+// MATING "within_patch": the mate is a random mature male from her patch. "matrix": the mate's patch is drawn from the
+// female's row of MATEMATRIX among patches with mature males, then the mate is a random mature male from that patch.
+// Females without a possible mate don't reproduce.
 reproduction(NULL, "F") {
-	// Check if female is mature
-	if(individual.tagL0){
-		if(MATING == "within_patch"){
-			mate_subpop = subpop;
-			potential_mates = mate_subpop.subsetIndividuals(sex = "M", tagL0 = T);
+	// SLiM calls this callback for each female; all females are handled in the first call, so turn it off for the rest of the tick
+	self.active = 0;
+	inds = sim.subpopulations.individuals;
+	females = inds[(inds.sex == "F") & inds.tagL0];
+	males = inds[(inds.sex == "M") & inds.tagL0];
+	if(size(females) == 0 | size(males) == 0) return;
+	female_patch = females.subpopulation.id;
+	male_patch = males.subpopulation.id;
+	// Patch of each female's mate (-1: no mate)
+	mate_patch = rep(-1, size(females));
+	if(MATING == "within_patch"){
+		mate_patch = ifelse(match(female_patch, male_patch) >= 0, female_patch, -1);
+	}
+	if(MATING == "matrix"){
+		male_patches = unique(male_patch);
+		for (p in unique(female_patch)){
+			in_p = which(female_patch == p);
+			weights = c(MATEMATRIX[p, male_patches]);
+			if(sum(weights) > 0) mate_patch[in_p] = sample(male_patches, size(in_p), replace = T, weights = weights);
 		}
-		if(MATING == "matrix"){
-			// Subpopulations with mature males
-			potential_subpops = unique(sim.subpopulations.subsetIndividuals(sex = "M", tagL0 = T).subpopulation);
-			if(length(potential_subpops) > 0){
-				weights = MATEMATRIX[subpop.id,potential_subpops.id];
-				if(sum(weights) > 0){
-					mate_subpop = sample(potential_subpops, size = 1, weights = weights);
-					potential_mates = mate_subpop.subsetIndividuals(sex = "M", tagL0 = T);
-				}
-			}
+	}
+	// Mate of each female (index into males): a random mature male from the mate patch
+	mate_i = rep(-1, size(females));
+	for (p in unique(mate_patch[mate_patch >= 0])){
+		mating = which(mate_patch == p);
+		mate_i[mating] = sample(which(male_patch == p), size(mating), replace = T);
+	}
+	has_mate = (mate_i >= 0);
+	females = females[has_mate];
+	female_patch = female_patch[has_mate];
+	mates = males[mate_i[has_mate]];
+	if(size(females) == 0) return;
+	defineGlobal("EGGLAYEVENTS", EGGLAYEVENTS + size(females));
+	females.tagL1 = T; // Lay eggs?
+	// Number of eggs before egg mortality (the thermal performance curve scales fecundity)
+	pre_mort_neggs = num_eggs(females);
+	if(QTL_TPC){
+		tpc_scale = thermal_performance(GrowthTemperatureBack[female_patch], females.getValue('Topt'), females.getValue('epsilon'), asFloat(TOPT_COST), CONSTANT_AREA, asFloat(TOPT_BASELINE), asFloat(EPSILON_BASELINE));
+		pre_mort_neggs = asInteger(round(pre_mort_neggs*tpc_scale));
+	}
+	// Number of surviving eggs including egg mortality
+	//neggs = rbinom(1, size = pre_mort_neggs, prob = 1- PATCHVARS.getValue("Mortality Eggs")[subpop.id]);
+	neggs = asInteger(round(pre_mort_neggs*(1- PATCHVARS.getValue("Mortality Eggs")[female_patch])));
+	new_births = BIRTHS;
+	new_eggdeaths = EGGDEATHS;
+	for (p in unique(female_patch)){
+		in_p = (female_patch == p);
+		new_births[p] = BIRTHS[p] + sum(pre_mort_neggs[in_p]);
+		new_eggdeaths[p] = EGGDEATHS[p] + sum(pre_mort_neggs[in_p] - neggs[in_p]);
+	}
+	defineGlobal("BIRTHS", new_births);
+	defineGlobal("EGGDEATHS", new_eggdeaths);
+	// Effects of fixed QTL mutations (homozygous)
+	if(QTL) fixed_m2 = 2*sum(sim.substitutionsOfType(m2).selectionCoeff);
+	if(QTL & QTL_TPC) fixed_m4 = 2*sum(sim.substitutionsOfType(m4).selectionCoeff);
+	// Without microsatellite mutation the mutation callback (s1) does nothing, so don't call it for every offspring this tick
+	if(MUTRATE * NLOCI == 0) s1.active = 0;
+	// Offspring, in the mother's patch. Created and given traits one mother at a time: this is faster than calculating
+	// traits for all offspring at once
+	for (i in which(neggs > 0)){
+		offspring = females[i].subpopulation.addCrossed(females[i], mates[i], count = neggs[i]);
+		offspring.setValue("natal", female_patch[i]);
+		offspring.setValue("migrant", F);
+		offspring.setValue("cdmp_age", -1);
+		offspring.tagL0 = F;
+		offspring.tagL1 = F;
+		// QTL
+		if(QTL & !QTL_TPC){
+			phenotypes = offspring.sumOfMutationsOfType(m2) + fixed_m2 + rnorm(length(offspring), mean = 0, sd = sqrt(QTL_VE)) + QTL_BASELINE;
+			offspring.setValuesVectorized("phenotype", phenotypes);
 		}
-		
-		if(exists("potential_mates")){
-			if(length(potential_mates) > 0){
-				mate = sample(potential_mates, 1);
-				defineGlobal("EGGLAYEVENTS", EGGLAYEVENTS + 1);
-				// Thermal performance curve scales fecundity
-				if(!QTL_TPC) pre_mort_neggs = num_eggs(individual);
-				if(QTL_TPC){
-					tpc_scale = thermal_performance(GrowthTemperatureBack[subpop.id], individual.getValue('Topt'), individual.getValue('epsilon'), asFloat(TOPT_COST), CONSTANT_AREA, asFloat(TOPT_BASELINE), asFloat(EPSILON_BASELINE));
-					pre_mort_neggs = asInteger(round(num_eggs(individual)*tpc_scale));
-				}
-				new_births = BIRTHS;
-				new_births[subpop.id] = BIRTHS[subpop.id] + pre_mort_neggs;
-				defineGlobal("BIRTHS", new_births);
-				// Number of surviving eggs including egg mortality
-				//neggs = rbinom(1, size = pre_mort_neggs, prob = 1- PATCHVARS.getValue("Mortality Eggs")[subpop.id]);
-				neggs = asInteger(round(pre_mort_neggs*(1- PATCHVARS.getValue("Mortality Eggs")[subpop.id])));
-				new_eggdeaths = EGGDEATHS;
-				new_eggdeaths[subpop.id] = EGGDEATHS[subpop.id] + (pre_mort_neggs - neggs);
-				defineGlobal("EGGDEATHS", new_eggdeaths);
-				individual.tagL1 = T; // Lay eggs?
-				offspring = subpop.addCrossed(individual, mate, count = neggs);
-				offspring.setValue("natal", subpop.id);
-				offspring.setValue("migrant", F);
-				offspring.setValue("cdmp_age", -1);
-				offspring.tagL0 = F;
-				offspring.tagL1 = F;
-				// QTL
-				if(QTL & !QTL_TPC){
-					phenotypes = offspring.sumOfMutationsOfType(m2) + 2*sum(sim.substitutionsOfType(m2).selectionCoeff) + rnorm(length(offspring), mean = 0, sd = sqrt(QTL_VE)) + QTL_BASELINE;
-					offspring.setValuesVectorized("phenotype", phenotypes);
-				}
-				if(QTL & QTL_TPC){
-					Topts = offspring.sumOfMutationsOfType(m2) + 2*sum(sim.substitutionsOfType(m2).selectionCoeff) + rnorm(length(offspring), mean = 0, sd = sqrt(TOPT_VE)) + TOPT_BASELINE;
-					epsilons = offspring.sumOfMutationsOfType(m4) + 2*sum(sim.substitutionsOfType(m4).selectionCoeff) + rnorm(length(offspring), mean = 0, sd = sqrt(EPSILON_VE)) + EPSILON_BASELINE;
-					offspring.setValuesVectorized("Topt", Topts);
-					offspring.setValuesVectorized("epsilon", pmax(0.001, epsilons));
-				}
-			}
+		if(QTL & QTL_TPC){
+			Topts = offspring.sumOfMutationsOfType(m2) + fixed_m2 + rnorm(length(offspring), mean = 0, sd = sqrt(TOPT_VE)) + TOPT_BASELINE;
+			epsilons = offspring.sumOfMutationsOfType(m4) + fixed_m4 + rnorm(length(offspring), mean = 0, sd = sqrt(EPSILON_VE)) + EPSILON_BASELINE;
+			offspring.setValuesVectorized("Topt", Topts);
+			offspring.setValuesVectorized("epsilon", pmax(0.001, epsilons));
 		}
 	}
 }
 
-// Mutation (applies to offspring in every patch)
-modifyChild() {
+// Mutation (applies to offspring in every patch). Turned off in reproduction() when there is no microsatellite mutation.
+s1 modifyChild() {
 	// Nothing to do without microsatellite mutation (this callback runs for every offspring)
 	if(MUTRATE * NLOCI == 0) return T;
 	for (genome in child.haplosomes){
@@ -1121,31 +1145,30 @@ function (integer)age_class(object<Individual> individuals, string method){
 	}
 }
 
-// Number of eggs produced by an individual
-function (integer)num_eggs(object<Individual> ind){
+// Number of eggs produced by each individual
+function (integer)num_eggs(object<Individual> inds){
 	if(SIZECONTROL){
 		if(POPVARS.getValue("Egg_Mean_ans") == "exp" & POPVARS.getValue("offno") == 2){
-			E_mu = POPVARS.getValue("Egg_Mean_par1")*exp(POPVARS.getValue("Egg_Mean_par2")*ind.getValue("size"));
-			if(E_mu > 0) noffspring = rpois(1, E_mu); else noffspring = 0;
-			return(noffspring);
+			E_mu = POPVARS.getValue("Egg_Mean_par1")*exp(POPVARS.getValue("Egg_Mean_par2")*inds.getValue("size"));
+			return poisson_eggs(E_mu);
 		}
-		else{
-			print("Egg_Mean_ans" + POPVARS.getValue("Egg_Mean_ans") + "offno" + POPVARS.getValue("offno") + " not supported yet. Using 2 offspring per individual.");
-			return(2);
-		}
+		print("Egg_Mean_ans" + POPVARS.getValue("Egg_Mean_ans") + "offno" + POPVARS.getValue("offno") + " not supported yet. Using 2 offspring per individual.");
+		return rep(2, size(inds));
 	}
-	else{
-		if(POPVARS.getValue("offno") == 2){
-			age_i = which(CLASSVARS.getValue("Age class") == age_class(ind, 'age'));
-			E_mu = CLASSVARS.getValue("Fecundity Ind")[age_i];
-			if(E_mu > 0) noffspring = rpois(1, E_mu); else noffspring = 0;
-			return(noffspring);
-		}
-		else{
-			print("offno" + POPVARS.getValue("offno") + " not supported yet. Using 2 offspring per individual.");
-			return(2);
-		}
+	age_i = match(age_class(inds, 'age'), CLASSVARS.getValue("Age class"));
+	if(POPVARS.getValue("offno") == 2){
+		return poisson_eggs(CLASSVARS.getValue("Fecundity Ind")[age_i]);
 	}
+	print("offno" + POPVARS.getValue("offno") + " not supported yet. Using 2 offspring per individual.");
+	return rep(2, size(inds));
+}
+
+// Poisson number of eggs with mean E_mu (0 where E_mu <= 0)
+function (integer)poisson_eggs(numeric E_mu){
+	noffspring = integer(size(E_mu));
+	positive = which(E_mu > 0);
+	if(size(positive) > 0) noffspring[positive] = rpois(size(positive), E_mu[positive]);
+	return noffspring;
 }
 
 // Destinations for straying individuals, following CDMetaPOP (GetProbArray 'strayer_emiPop' / 'strayer_natalPop'):
