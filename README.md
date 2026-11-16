@@ -150,7 +150,7 @@ If the quantitative trait model is used, CDMetaPOP_slim will output two addition
 
 `Ve`: Environmental variance.
 
-`heritability`: Equal to $V_A/V_P$, where $V_P$ is the total phenotypic variance and both $V_A$ and $V_P$ are calculated for each tick's newborn's before selection.
+`heritability`: Equal to $V_A/V_P$, where $V_P$ is the total phenotypic variance and both $V_A$ and $V_P$ are calculated for each tick's newborns before selection. To save time, CDMetaPOP_slim only creates the offspring that survive the density-dependent mortality step after migrating out ("Packing out"), so these are the surviving newborns, which are a random sample of all newborns with respect to genotype.
 
 `qtl_alleles`: Number of alleles that influence the quantitative trait.
 
