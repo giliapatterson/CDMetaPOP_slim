@@ -1975,6 +1975,26 @@ function (float) additiveContributionsByOrigin(object<Subpopulation>$ focal_subp
 	return contributions + matrix(repEach(2*sub_effects, n_inds), nrow = n_inds);
 }
 
+// Share of a focal patch's old variants (those present at MUTATION_ORIGIN_TICK) that came from
+// each patch, using each variant's patch frequencies at MUTATION_ORIGIN_TICK. Counts copies of
+// segregating mutations and of substitutions (carried by all 2N haplosomes). NA if there are no old variants.
+function (*) originTickFreqs(object<Subpopulation>$ focal_subpop, object<Mutation> focal_mutations, object<Substitution> focal_subs){
+	n_subpops = length(sim.subpopulations);
+	counts = rep(0.0, n_subpops);
+	if(length(focal_mutations) > 0){
+		freqs800 = matrix(focal_mutations.getValue('freqs800'), nrow = n_subpops);
+		current_counts = sim.mutationCounts(focal_subpop, focal_mutations);
+		counts = counts + sapply(seqLen(n_subpops), "sum(current_counts*freqs800[applyValue,]);");
+	}
+	if(length(focal_subs) > 0){
+		freqs800_subs = matrix(focal_subs.getValue('freqs800'), nrow = n_subpops);
+		current_counts_subs = rep(focal_subpop.individualCount*2, length(focal_subs));
+		counts = counts + sapply(seqLen(n_subpops), "sum(current_counts_subs*freqs800_subs[applyValue,]);");
+	}
+	if(sum(counts) == 0) return rep('NA', n_subpops);
+	return counts/sum(counts);
+}
+
 function (string) mutationalOrigins(string header_string, integer focal_subpop_id){
 	focal_subpop = sim.subpopulations[focal_subpop_id];
 	// Any mutations in the focal patch? (mutationCounts() is much faster than collecting every copy of every mutation)
@@ -1987,20 +2007,7 @@ function (string) mutationalOrigins(string header_string, integer focal_subpop_i
 			all_subs = sim.substitutionsOfType(m2);
 			focal_subs = all_subs[all_subs.originTick <= MUTATION_ORIGIN_TICK];
 			new_subs = all_subs[all_subs.originTick > MUTATION_ORIGIN_TICK];
-			if(length(focal_mutations) > 0){
-				freqs800 = matrix(focal_mutations.getValue('freqs800'), nrow = length(sim.subpopulations));
-				current_counts = sim.mutationCounts(focal_subpop, focal_mutations);
-				if(length(focal_subs) > 0){
-					freqs800_subs = matrix(focal_subs.getValue('freqs800'), nrow = length(sim.subpopulations));
-					current_counts_subs = rep(focal_subpop.individualCount*2, length(focal_subs));
-					Topt_count_origin_tick = sapply(sim.subpopulations.id, "sum(current_counts*freqs800[applyValue,]) + sum(current_counts_subs*freqs800_subs[applyValue,]);");
-				}
-				else{
-					Topt_count_origin_tick = sapply(sim.subpopulations.id, "sum(current_counts*freqs800[applyValue,]);");
-				}
-				Topt_freq_origin_tick = Topt_count_origin_tick/sum(Topt_count_origin_tick);
-			}
-			if(length(focal_mutations) == 0) Topt_freq_origin_tick = rep('NA', length(sim.subpopulations));
+			Topt_freq_origin_tick = originTickFreqs(focal_subpop, focal_mutations, focal_subs);
 			Topt_prop_new = (length(new_mutations) + length(new_subs))/(length(all_mutations) + length(all_subs));
 			
 			all_mutations = unique(focal_subpop.haplosomes.mutationsOfType(m3));
@@ -2009,20 +2016,7 @@ function (string) mutationalOrigins(string header_string, integer focal_subpop_i
 			all_subs = sim.substitutionsOfType(m3);
 			focal_subs = all_subs[all_subs.originTick <= MUTATION_ORIGIN_TICK];
 			new_subs = all_subs[all_subs.originTick > MUTATION_ORIGIN_TICK];
-			if(length(focal_mutations) > 0){
-				freqs800 = matrix(focal_mutations.getValue('freqs800'), nrow = length(sim.subpopulations));
-				current_counts = sim.mutationCounts(focal_subpop, focal_mutations);
-				if(length(focal_subs) > 0){
-					freqs800_subs = matrix(focal_subs.getValue('freqs800'), nrow = length(sim.subpopulations));
-					current_counts_subs = rep(focal_subpop.individualCount*2, length(focal_subs));
-					neutral_count_origin_tick = sapply(sim.subpopulations.id, "sum(current_counts*freqs800[applyValue,]) + sum(current_counts_subs*freqs800_subs[applyValue,]);");
-				}
-				else{
-					neutral_count_origin_tick = sapply(sim.subpopulations.id, "sum(current_counts*freqs800[applyValue,]);");
-				}
-				neutral_freq_origin_tick = neutral_count_origin_tick/sum(neutral_count_origin_tick);
-			}
-			if(length(focal_mutations) == 0) neutral_freq_origin_tick = rep('NA', length(sim.subpopulations));
+			neutral_freq_origin_tick = originTickFreqs(focal_subpop, focal_mutations, focal_subs);
 			neutral_prop_new = (length(new_mutations) + length(new_subs))/(length(all_mutations) + length(all_subs));
 			
 			all_mutations = unique(focal_subpop.haplosomes.mutationsOfType(m4));
@@ -2031,20 +2025,7 @@ function (string) mutationalOrigins(string header_string, integer focal_subpop_i
 			all_subs = sim.substitutionsOfType(m4);
 			focal_subs = all_subs[all_subs.originTick <= MUTATION_ORIGIN_TICK];
 			new_subs = all_subs[all_subs.originTick > MUTATION_ORIGIN_TICK];
-			if(length(focal_mutations) > 0){
-				freqs800 = matrix(focal_mutations.getValue('freqs800'), nrow = length(sim.subpopulations));
-				current_counts = sim.mutationCounts(focal_subpop, focal_mutations);
-				if(length(focal_subs) > 0){
-					freqs800_subs = matrix(focal_subs.getValue('freqs800'), nrow = length(sim.subpopulations));
-					current_counts_subs = rep(focal_subpop.individualCount*2, length(focal_subs));
-					epsilon_count_origin_tick = sapply(sim.subpopulations.id, "sum(current_counts*freqs800[applyValue,]) + sum(current_counts_subs*freqs800_subs[applyValue,]);");
-				}
-				else{
-					epsilon_count_origin_tick = sapply(sim.subpopulations.id, "sum(current_counts*freqs800[applyValue,]);");
-				}
-				epsilon_freq_origin_tick = epsilon_count_origin_tick/sum(epsilon_count_origin_tick);
-			}
-			if(length(focal_mutations) == 0) epsilon_freq_origin_tick = rep('NA', length(sim.subpopulations));
+			epsilon_freq_origin_tick = originTickFreqs(focal_subpop, focal_mutations, focal_subs);
 			epsilon_prop_new = (length(new_mutations) + length(new_subs))/(length(all_mutations) + length(all_subs));
 		}
 		else{
