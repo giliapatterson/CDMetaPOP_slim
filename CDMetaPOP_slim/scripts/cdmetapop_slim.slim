@@ -378,17 +378,18 @@ first(){
 	defineGlobal("SUBPOP_NMALES", sapply(sim.subpopulations, "length(applyValue.subsetIndividuals(sex = 'M'));"));
 }
 
-first(){
-	print("Reproduction");
-}
-
-// Reproduction, once per tick for all patches: each mature female mates with one mature male and lays eggs.
+// Mating and eggs: each mature female mates with one mature male and lays eggs.
 // MATING "within_patch": the mate is a random mature male from her patch. "matrix": the mate's patch is drawn from the
 // female's row of MATEMATRIX among patches with mature males, then the mate is a random mature male from that patch.
 // Females without a possible mate don't reproduce.
-reproduction(NULL, "F") {
-	// SLiM calls this callback for each female; all females are handled in the first call, so turn it off for the rest of the tick
-	self.active = 0;
+// Only the number of eggs of each female is decided here (MOTHER_IDS, FATHER_IDS, NATAL, NEGGS); offspring that survive
+// density-dependent mortality are created in reproduction().
+first(){
+	print("Mating");
+	defineGlobal("MOTHER_IDS", integer(0));
+	defineGlobal("FATHER_IDS", integer(0));
+	defineGlobal("NATAL", integer(0));
+	defineGlobal("NEGGS", integer(0));
 	inds = sim.subpopulations.individuals;
 	females = inds[(inds.sex == "F") & inds.tagL0];
 	males = inds[(inds.sex == "M") & inds.tagL0];
@@ -435,19 +436,99 @@ reproduction(NULL, "F") {
 	}
 	defineGlobal("BIRTHS", new_births);
 	defineGlobal("EGGDEATHS", new_eggdeaths);
+	// Offspring are created in reproduction(), after density-dependent mortality has been decided
+	defineGlobal("MOTHER_IDS", females.pedigreeID);
+	defineGlobal("FATHER_IDS", mates.pedigreeID);
+	defineGlobal("NATAL", female_patch);
+	defineGlobal("NEGGS", neggs);
+}
+
+// Growth for "Back" and aging. Done before offspring are created (newborns are created at age 0, see reproduction()).
+first(){
+	if (SIZECONTROL){
+		// Growth for "Back"
+		print("Growing Back");
+		grow('back');
+	}
+	// Aging
+	print("Aging");
+	individuals = sim.subpopulations.individuals;
+	individuals.setValuesVectorized("cdmp_age", individuals.getValue("cdmp_age") + 1);
+	if(!SIZECONTROL){
+		// Set new body sizes based on age (but don't let individuals shrink)
+		ages = age_class(individuals, method = "age");
+		potential_new_sizes =  rnorm(length(individuals), mean = CLASSVARS.getValue("Body Size Mean (mm)")[ages], sd = CLASSVARS.getValue("Body Size Std (mm)")[ages]);
+		individuals.setValuesVectorized('size', pmax(individuals.getValue('size'), potential_new_sizes));
+	}
+
+	ages = CLASSVARS.getValue("Age class")[CLASSVARS.getValue("Age class") != 0];
+	if(SIZECONTROL) defineGlobal("N_GROWTHBACK", c(0, count_age_classes(sim.subpopulations.individuals, 'size', ages))); else defineGlobal("N_GROWTHBACK", c(0, count_age_classes(sim.subpopulations.individuals, 'age', ages)));
+}
+first(){
+	print("Migration Out");
+	// Migration out. Runs before this tick's offspring are created, so they don't migrate out: as in CDMetaPOP, where
+	// offspring are added after the migrate-out step, individuals first migrate out the year after they are born, at age 1.
+	individuals = sim.subpopulations.individuals;
+	if(SIZECONTROL) age_classes = age_class(individuals, method = "size"); else age_classes = age_class(individuals, method = "age");
+	pmigrate_out = PATCHVARS.getValue("Migration Out Prob")[individuals.subpopulation.id]*CLASSVARS.getValue("Migration Out Prob")[age_classes];
+	migrators = individuals[runif(length(individuals)) < pmigrate_out];
+	destinations = sample_subpops(migrators, MIGRATIONOUT);
+	//print(sum(destinations.id == 3) + " individuals migrated to 3.");
+	for (dest in unique(destinations)){dest.takeMigrants(migrators[destinations == dest]);}
+	// Individuals that had somewhere to migrate to are now migrants (see Straying and Migration Back)
+	if(length(migrators) > 0){
+		had_destination = sapply(migrators.subpopulation.id, "sum(MIGRATIONOUT[applyValue,]) > 0;");
+		migrators[had_destination].setValue("migrant", T);
+	}
+	//popsizes = sapply(sim.subpopulations, "applyValue.individualCount;");
+	//print("Population sizes: " + paste(popsizes));
+}
+
+// Density-dependent mortality out ("packing" or "N"), decided before offspring are created so that only surviving
+// offspring are created (see density_dependent_survival()). Individuals that die are killed in late().
+first(){
+	if(POPVARS.getValue("popmodel") == "packing") print("Packing out (deciding survivors)");
+	if(POPVARS.getValue("popmodel") == "N") print("Density dependent out (deciding survivors)");
+	density_dependent_survival();
+}
+
+// Reproduction, once per tick for all patches: create the offspring that survive density-dependent mortality
+// (OFFSPRING_SURVIVORS, from density_dependent_survival()), in the mother's patch at mating (NATAL).
+// Offspring are created at age 0 and, as newborns in CDMetaPOP, get a body size drawn from age class 0 (with
+// SIZECONTROL, the size drawn in density_dependent_survival()) and, without SIZECONTROL, a maturity.
+reproduction(NULL, "F") {
+	// SLiM calls this callback for each female; all offspring are created in the first call, so turn it off for the rest of the tick
+	self.active = 0;
+	creating = which(OFFSPRING_SURVIVORS > 0);
+	if(size(creating) == 0) return;
+	inds = sim.subpopulations.individuals;
+	ids = inds.pedigreeID;
+	mothers = inds[match(MOTHER_IDS[creating], ids)];
+	fathers = inds[match(FATHER_IDS[creating], ids)];
+	natal_patches = sim.subpopulations[match(NATAL[creating], sim.subpopulations.id)];
+	counts = OFFSPRING_SURVIVORS[creating];
 	// Effects of fixed QTL mutations (homozygous)
 	if(QTL) fixed_m2 = 2*sum(sim.substitutionsOfType(m2).selectionCoeff);
 	// Without microsatellite mutation the mutation callback (s1) does nothing, so don't call it for every offspring this tick
 	if(MUTRATE * NLOCI == 0) s1.active = 0;
-	// Offspring, in the mother's patch. Created and given traits one mother at a time: this is faster than calculating
-	// traits for all offspring at once
-	for (i in which(neggs > 0)){
-		offspring = females[i].subpopulation.addCrossed(females[i], mates[i], count = neggs[i]);
-		offspring.setValue("natal", female_patch[i]);
+	// Created and given traits one mother at a time: this is faster than calculating traits for all offspring at once
+	for (i in seqAlong(creating)){
+		offspring = natal_patches[i].addCrossed(mothers[i], fathers[i], count = counts[i]);
+		offspring.setValue("natal", NATAL[creating[i]]);
 		offspring.setValue("migrant", F);
-		offspring.setValue("cdmp_age", -1);
+		offspring.setValue("cdmp_age", 0);
 		offspring.tagL0 = F;
 		offspring.tagL1 = F;
+		offspring.tagL2 = F;
+		if(SIZECONTROL){
+			offspring.setValuesVectorized("size", OFFSPRING_SIZES[OFFSPRING_SIZE_MOTHERS == creating[i]]);
+		}
+		else{
+			offspring.setValuesVectorized("size", rnorm(counts[i], mean = CLASSVARS.getValue("Body Size Mean (mm)")[0], sd = CLASSVARS.getValue("Body Size Std (mm)")[0]));
+			// Mature age 0s if SIZECONTROL is not operating
+			// Note that this behavior is for consistency with CDMetaPOP, and could be a bug in CDMetaPOP
+			mature(offspring);
+		}
 		// QTL
 		if(QTL){
 			phenotypes = offspring.sumOfMutationsOfType(m2) + fixed_m2 + rnorm(length(offspring), mean = 0, sd = sqrt(QTL_VE)) + QTL_BASELINE;
@@ -498,39 +579,10 @@ s1 modifyChild() {
 	return T;
 }
 
-early(){
-	
-	if (SIZECONTROL){
-		// Growth for "Back"
-		print("Growing Back");
-		grow('back');
-	}
-	// Aging
-	print("Aging");
-	individuals = sim.subpopulations.individuals;
-	individuals.setValuesVectorized("cdmp_age", individuals.getValue("cdmp_age") + 1);
-	age0s = individuals[age_class(individuals, method = "age") == 0];
-	age0s.setValuesVectorized("size", rnorm(length(age0s), mean = CLASSVARS.getValue("Body Size Mean (mm)")[0], sd = CLASSVARS.getValue("Body Size Std (mm)")[0]));
-	if(!SIZECONTROL){
-		// Mature age 0s if SIZECONTROL is not operationg
-		// Note that this behavior is for consistency with CDMetaPOP, and could be a bug in CDMetaPOP
-		if(length(age0s) > 0) mature(age0s);
-		// Set new body sizes based on age (but don't let individuals shrink)
-		individuals = sim.subpopulations.individuals[age_class(sim.subpopulations.individuals, 'age') != 0];
-		ages = age_class(individuals, method = "age");
-		potential_new_sizes =  rnorm(length(individuals), mean = CLASSVARS.getValue("Body Size Mean (mm)")[ages], sd = CLASSVARS.getValue("Body Size Std (mm)")[ages]);
-		individuals.setValuesVectorized('size', pmax(individuals.getValue('size'), potential_new_sizes));
-	}
-	
-	ages = CLASSVARS.getValue("Age class")[CLASSVARS.getValue("Age class") != 0];
-	if(SIZECONTROL) defineGlobal("N_GROWTHBACK", c(0, count_age_classes(sim.subpopulations.individuals, 'size', ages))); else defineGlobal("N_GROWTHBACK", c(0, count_age_classes(sim.subpopulations.individuals, 'age', ages)));
-
-	
-	// CDMetaPOP output here
-}
 
 early(){
-	// Heritability of the quantitative trait, calculated from this tick's newborns (age 0 after aging) before any
+	// Heritability of the quantitative trait, calculated from this tick's newborns (the offspring that survive
+	// density-dependent mortality, a random sample of all offspring with respect to genotype) before any
 	// selection or mortality, so that genetic and environmental effects are independent.
 	// Written in the QTL output later this tick.
 	if(QTL){
@@ -546,45 +598,15 @@ mutationEffect(m1) { return 1.0; }
 mutationEffect(m2) { return 1.0; }
 
 
-late(){
-	print("Migration Out");
-	// Migration out. Age 0s (born this tick) don't migrate out: as in CDMetaPOP, where offspring are added after
-	// the migrate-out step, individuals first migrate out the year after they are born, at age 1.
-	all_inds = sim.subpopulations.individuals;
-	all_ages = age_class(all_inds, method = "age");
-	individuals = all_inds[all_ages > 0];
-	if(SIZECONTROL) age_classes = age_class(individuals, method = "size"); else age_classes = age_class(individuals, method = "age");
-	pmigrate_out = PATCHVARS.getValue("Migration Out Prob")[individuals.subpopulation.id]*CLASSVARS.getValue("Migration Out Prob")[age_classes];
-	migrators = individuals[runif(length(individuals)) < pmigrate_out];
-	destinations = sample_subpops(migrators, MIGRATIONOUT);
-	//print(sum(destinations.id == 3) + " individuals migrated to 3.");
-	for (dest in unique(destinations)){dest.takeMigrants(migrators[destinations == dest]);}
-	// Individuals that had somewhere to migrate to are now migrants (see Straying and Migration Back)
-	if(length(migrators) > 0){
-		had_destination = sapply(migrators.subpopulation.id, "sum(MIGRATIONOUT[applyValue,]) > 0;");
-		migrators[had_destination].setValue("migrant", T);
-	}
-	//popsizes = sapply(sim.subpopulations, "applyValue.individualCount;");
-	//print("Population sizes: " + paste(popsizes));
-}
 
 late(){
-	defineGlobal("N1", sim.subpopulations.individualCount);
-	ages = CLASSVARS.getValue("Age class");
-	if (SIZECONTROL) defineGlobal("N1_AGE", count_age_classes(sim.subpopulations.individuals, 'size', ages)); else defineGlobal("N1_AGE", count_age_classes(sim.subpopulations.individuals, 'age', ages));
-	
-	// Density dependent mortality
-	if(POPVARS.getValue("popmodel") == "packing"){
-		print("Packing out");
-		nkilled = packing();
-	}
-	if(POPVARS.getValue("popmodel") == "N"){
-		print("Density dependent out");
-		nkilled = carrying_capacity_mortality();
-	}
-	defineGlobal("DEATHS1", nkilled.getValue("nkilled_subpops"));
-	defineGlobal("DEATHS1_AGE", nkilled.getValue("nkilled_ages"));
-	
+	// Density dependent mortality: kill the individuals chosen in density_dependent_survival() (before offspring were
+	// created). N1, N1_AGE, DEATHS1 and DEATHS1_AGE, which include offspring that were never created, are set there too.
+	if(POPVARS.getValue("popmodel") == "packing") print("Packing out");
+	if(POPVARS.getValue("popmodel") == "N") print("Density dependent out");
+	sim.killIndividuals(sim.subpopulations.individuals[sim.subpopulations.individuals.tagL2]);
+	print(sum(DEATHS1) + " individuals killed.");
+
 }
 
 late(){
@@ -841,14 +863,26 @@ function (integer)age_class(object<Individual> individuals, string method){
 		if(method == "age") return(pmin(individuals.getValue("cdmp_age"), max(CLASSVARS.getValue("Age class"))));
 		if (method == "size"){
 			sizes = individuals.getValue("size");
-			// Find closest mean size in CLASSVARS
-			age_indices = sapply(sizes, "whichMin(abs(applyValue - CLASSVARS.getValue('Body Size Mean (mm)')));");
-			return(CLASSVARS.getValue("Age class")[age_indices]);
+			return(size_class(sizes));
 		}
 	}
 	else{
 		return(c());
 	}
+}
+
+// Age class with the closest mean body size (CLASSVARS "Body Size Mean (mm)") to each size; the first such class on ties
+function (integer)size_class(float sizes){
+	means = CLASSVARS.getValue("Body Size Mean (mm)");
+	best = integer(length(sizes));
+	best_distance = abs(sizes - means[0]);
+	for (i in seqLen(length(means))){
+		distance = abs(sizes - means[i]);
+		closer = (distance < best_distance);
+		best[closer] = i;
+		best_distance[closer] = distance[closer];
+	}
+	return(CLASSVARS.getValue("Age class")[best]);
 }
 
 // Number of eggs produced by each individual
@@ -979,18 +1013,23 @@ function (void)mature(object <Individual> individuals){
 	return;
 }
 	
-// Packing
+// Packing: number of survivors in each age class of a patch (age classes by age_class_method)
 function (integer)packing_survivors(object<Subpopulation> pack_subpop, string age_class_method){
-	Nj = pack_subpop.individualCount; // Current N
-	Kj = PATCHKS[pack_subpop.id]; // Total carrying capacity for the patch
+	ind_age_classes = age_class(pack_subpop.individuals, method = age_class_method); // Age classes of every individual in the population
+	Nji = sapply(CLASSVARS.getValue("Age class"), "sum(ind_age_classes == applyValue);"); // Number of individuals in each age class
+	return(packing_survivors_from_counts(Nji, PATCHKS[pack_subpop.id]));
+}
+
+// Packing: number of survivors in each age class, from the number of individuals in each age class (Nji, in the order
+// of CLASSVARS "Age class") and the patch's carrying capacity Kj
+function (integer)packing_survivors_from_counts(integer Nji, float$ Kj){
+	is = CLASSVARS.getValue("Age class"); // Age classes and indices of age classes
+	Nj = sum(Nji); // Current N
 	if(Nj == 0 | Kj <= 0){
-		return(integer(length(CLASSVARS.getValue("Age class"))));
+		return(integer(length(is)));
 	}
 	if (Kj == Nj) R0j = 1; else R0j = (log(Kj/Nj))/(1-Nj/Kj); // Adjusted R0
-	is = CLASSVARS.getValue("Age class"); // Age classes and indices of age classes
-	ind_age_classes = age_class(pack_subpop.individuals, method = age_class_method); // Age classes of every individual in the population
-	Nji = sapply(is, "sum(ind_age_classes == applyValue);"); // Number of individuals in each age class
-	R0ji = exp(R0j * (1-(Nji/Kj))); //class-specific, independent growth rate moment 
+	R0ji = exp(R0j * (1-(Nji/Kj))); //class-specific, independent growth rate moment
 	C = POPVARS.getValue("popmodel_par1"); // C
 	Kji_unscaled = exp(C*(is+1));
 	prop_Kji = Kji_unscaled/sum(Kji_unscaled); //ideal distribution of Kj among classes
@@ -1014,6 +1053,91 @@ function (integer)packing_survivors(object<Subpopulation> pack_subpop, string ag
 	}
 
 	return(asInteger(round(nsurvive)));
+}
+
+// Density-dependent mortality out, decided before this tick's offspring are created.
+// In each patch, the pool is the individuals in the patch plus the eggs laid there (NEGGS of the mothers with NATAL in
+// the patch), which count as age class 0 (with SIZECONTROL, the size class of a body size drawn for each egg from age
+// class 0). As in CDMetaPOP:
+//   "packing": the number of survivors in each age class comes from packing_survivors(); survivors are a random
+//              sample of the class.
+//   "N":       if the pool is larger than K, a random sample of pool size - K dies.
+// This gives the same distribution as creating every egg and then killing individuals at random within classes.
+// Sets: tagL2 = T on individuals that die (killed in late()); OFFSPRING_SURVIVORS (surviving offspring of each mother,
+// in the order of MOTHER_IDS); with SIZECONTROL, OFFSPRING_SIZES and OFFSPRING_SIZE_MOTHERS (body size and mother of
+// each surviving offspring); N1, N1_AGE, DEATHS1 and DEATHS1_AGE (numbers before mortality and deaths, by patch and by
+// age class, including offspring that are never created).
+function (void)density_dependent_survival(void){
+	model = POPVARS.getValue("popmodel");
+	age_class_vals = CLASSVARS.getValue("Age class");
+	n1 = integer(length(sim.subpopulations));
+	n1_age = integer(length(age_class_vals));
+	deaths = integer(length(sim.subpopulations));
+	deaths_age = integer(length(age_class_vals));
+	survivors = integer(length(NEGGS));
+	surviving_sizes = float(0);
+	surviving_size_mothers = integer(0);
+	sim.subpopulations.individuals.tagL2 = F;
+	for (subpop in sim.subpopulations){
+		individuals = subpop.individuals;
+		n_inds = length(individuals);
+		// Eggs laid in the patch, as the index of their mother
+		patch_mothers = which((NATAL == subpop.id) & (NEGGS > 0));
+		egg_mothers = repEach(patch_mothers, NEGGS[patch_mothers]);
+		n_eggs = length(egg_mothers);
+		n_pool = n_inds + n_eggs;
+		n1[subpop.id] = n_pool;
+		if(n_pool == 0) next;
+		// Age class (by size with SIZECONTROL) of each individual, then each egg
+		if(SIZECONTROL){
+			egg_sizes = rnorm(n_eggs, mean = CLASSVARS.getValue("Body Size Mean (mm)")[0], sd = CLASSVARS.getValue("Body Size Std (mm)")[0]);
+			pool_classes = c(age_class(individuals, method = "size"), size_class(egg_sizes));
+		}
+		else pool_classes = c(age_class(individuals, method = "age"), rep(0, n_eggs));
+		Nji = sapply(age_class_vals, "sum(pool_classes == applyValue);");
+		n1_age = n1_age + Nji;
+		survive = rep(T, n_pool);
+		if(model == "packing"){
+			nsurvivors = packing_survivors_from_counts(Nji, PATCHKS[subpop.id]);
+			survive = rep(F, n_pool);
+			for (i in seqAlong(age_class_vals)){
+				in_class = which(pool_classes == age_class_vals[i]);
+				if(nsurvivors[i] > 0) survive[sample(in_class, nsurvivors[i])] = T;
+				ndie = Nji[i] - nsurvivors[i];
+				deaths[subpop.id] = deaths[subpop.id] + ndie;
+				deaths_age[i] = deaths_age[i] + ndie;
+			}
+		}
+		if(model == "N"){
+			nsurvivors = PATCHKS[subpop.id];
+			if(n_pool > nsurvivors){
+				ndeaths = asInteger(n_pool - nsurvivors);
+				dead = sample(0:(n_pool - 1), ndeaths);
+				survive[dead] = F;
+				deaths[subpop.id] = ndeaths;
+				// Deaths by age class (by age, also with SIZECONTROL); eggs are age 0
+				death_ages = c(age_class(individuals, method = "age"), rep(0, n_eggs))[dead];
+				deaths_age = deaths_age + sapply(age_class_vals, "sum(death_ages == applyValue);");
+			}
+		}
+		if(n_inds > 0) individuals[!survive[0:(n_inds - 1)]].tagL2 = T;
+		if(n_eggs > 0){
+			egg_survives = survive[n_inds:(n_pool - 1)];
+			surviving_mothers = egg_mothers[egg_survives];
+			if(size(surviving_mothers) > 0) survivors = survivors + tabulate(surviving_mothers, length(NEGGS) - 1);
+			if(SIZECONTROL){
+				surviving_sizes = c(surviving_sizes, egg_sizes[egg_survives]);
+				surviving_size_mothers = c(surviving_size_mothers, surviving_mothers);
+			}
+		}
+	}
+	defineGlobal("OFFSPRING_SURVIVORS", survivors);
+	defineGlobal("OFFSPRING_SIZES", surviving_sizes);
+	defineGlobal("OFFSPRING_SIZE_MOTHERS", surviving_size_mothers);
+	defineGlobal("N1", n1);
+	defineGlobal("N1_AGE", n1_age);
+	defineGlobal("DEATHS1", deaths);
+	defineGlobal("DEATHS1_AGE", deaths_age);
 }
 
 function (object <Dictionary>)packing(void){
