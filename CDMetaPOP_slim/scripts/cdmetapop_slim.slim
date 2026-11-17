@@ -217,43 +217,56 @@ initialize() {
 		initializeGenomicElementType("g2", c(m2, m4), c(0.5, 0.5));
 		// Genomic element for neutral regions
 		initializeGenomicElementType("g3", m3, 1.0);
-		// Read in genome
+		// Read in genome: one row per linkage group (trout chromosome)
 		genome = readCSV(PARAM_FOLDER + POPVARS.getValue('genome')[0]);
-		// Distribute QTL regions among chromosomes
-		qtl_chroms = sample(0:(genome.nrow-1), QTL_REGIONS, replace = T, weights = genome.getValue('Length')/sum(genome.getValue('Length')));
-		// Number of qtls on each chromosome
-		qtl_counts = tabulate(qtl_chroms, genome.nrow - 1);
-		// Dictionary to store regions, mutation rates, and whether each region is a QTL or not
+		// The linkage groups are laid end to end on a single SLiM chromosome, with a recombination rate of 0.5
+		// between neighbouring groups so they are inherited independently, as separate chromosomes would be.
+		// Inheritance is the same as with one SLiM chromosome per linkage group, but each individual has
+		// 2 haplosomes instead of 2 per linkage group, which uses far less memory.
+		n_lg = genome.nrow;
+		lg_lengths = asInteger(genome.getValue('Length'));
+		lg_offsets = c(0, cumSum(lg_lengths))[0:(n_lg - 1)]; // position of each linkage group's first base
+		total_length = sum(lg_lengths);
+		defineConstant('LINKAGE_GROUP_STARTS', lg_offsets);
+		// Distribute QTL regions among linkage groups
+		qtl_chroms = sample(0:(n_lg - 1), QTL_REGIONS, replace = T, weights = genome.getValue('Length')/sum(genome.getValue('Length')));
+		// Number of qtls on each linkage group
+		qtl_counts = tabulate(qtl_chroms, n_lg - 1);
+		// Dictionary to store regions, mutation rates, and whether each region is a QTL or not (keyed by chromosome id)
 		region_ends_dict = Dictionary();
 		is_qtl_dict = Dictionary();
 		mutation_rate_dict = Dictionary();
-		for(i in 0:(genome.nrow-1)){
+		// Mutation rate regions and recombination rate regions along the whole chromosome
+		region_ends = c();
+		mutation_rates = c();
+		is_qtl = c();
+		rec_ends = c();
+		rec_rates = c();
+		initializeChromosome(1, total_length, type = "A", symbol = "c1");
+		for(i in 0:(n_lg - 1)){
 			row = genome.subsetRows(i);
 			id = row.getValue('Chromosome');
-			length = asInteger(row.getValue('Length'));
+			offset = lg_offsets[i];
+			length = lg_lengths[i];
 			rr = row.getValue('recombination_rate');
 			mr = row.getValue('mutation_rate');
 			potential_nqtls = qtl_counts[i];
 			print(potential_nqtls + " QTLs");
-			// Pick start positions for QTL regions
-			// Number of non-overlapping QTL regions that fit on the chromosome (0 if it is shorter than one region)
+			// Pick start positions for QTL regions (relative to the start of the linkage group)
+			// Number of non-overlapping QTL regions that fit on the linkage group (0 if it is shorter than one region)
 			nslots = asInteger(floor(length/QTL_REGION_LENGTH));
 			if(nslots > 0) potential_starts = (0:(nslots - 1))*QTL_REGION_LENGTH; else potential_starts = integer(0);
 			nqtls = min(potential_nqtls, nslots);
-			if(nqtls < potential_nqtls) print("Chromosome " + id + " only has room for " + nslots + " QTL regions; " + (potential_nqtls - nqtls) + " QTL regions dropped");
+			if(nqtls < potential_nqtls) print("Linkage group " + id + " only has room for " + nslots + " QTL regions; " + (potential_nqtls - nqtls) + " QTL regions dropped");
 			if(nqtls > 0) qtl_starts = sort(sample(potential_starts, nqtls)); else qtl_starts = integer(0);
 			// Add QTL genomic elements to QTL regions and neutral genomic elements to in between regions
-			// Keep track of mutation rate regions
-			region_ends = c();
-			mutation_rates = c();
-			is_qtl = c();
-			initializeChromosome(id, length, type = "A", symbol = "c" + id);
+			// (positions on the chromosome are the position in the linkage group + offset)
 			neutral_start = 0;
 			if(nqtls > 0) neutral_end = qtl_starts[0] - 1; else neutral_end = length - 1;
 			// >= so that a 1 bp neutral region (start == end) is still added
 			if(neutral_end >= neutral_start){
-				initializeGenomicElement(g3, start = asInteger(neutral_start), end = asInteger(neutral_end));
-				region_ends = c(region_ends, asInteger(neutral_end));
+				initializeGenomicElement(g3, start = asInteger(offset + neutral_start), end = asInteger(offset + neutral_end));
+				region_ends = c(region_ends, asInteger(offset + neutral_end));
 				mutation_rates = c(mutation_rates, 0.0);
 				is_qtl = c(is_qtl, F);
 			}
@@ -262,24 +275,39 @@ initialize() {
 					start_pos = qtl_starts[k];
 					neutral_start = start_pos + QTL_REGION_LENGTH;
 					if (k < length(qtl_starts) - 1) neutral_end = qtl_starts[k + 1] - 1; else neutral_end = length - 1;
-					initializeGenomicElement(g2, start = asInteger(start_pos), end = asInteger(start_pos + QTL_REGION_LENGTH - 1));
-					region_ends = c(region_ends, asInteger(start_pos + QTL_REGION_LENGTH - 1));
+					initializeGenomicElement(g2, start = asInteger(offset + start_pos), end = asInteger(offset + start_pos + QTL_REGION_LENGTH - 1));
+					region_ends = c(region_ends, asInteger(offset + start_pos + QTL_REGION_LENGTH - 1));
 					mutation_rates = c(mutation_rates, mr);
 					is_qtl = c(is_qtl, T);
 					if(neutral_end >= neutral_start){
-						initializeGenomicElement(g3, start = asInteger(neutral_start), end = asInteger(neutral_end));
-						region_ends = c(region_ends, asInteger(neutral_end));
+						initializeGenomicElement(g3, start = asInteger(offset + neutral_start), end = asInteger(offset + neutral_end));
+						region_ends = c(region_ends, asInteger(offset + neutral_end));
 						mutation_rates = c(mutation_rates, 0.0);
 						is_qtl = c(is_qtl, F);
 					}
 				}
 			}
-			initializeMutationRate(mutation_rates*QTL_PROP_REGION, ends = region_ends);
-			region_ends_dict.setValue(id, region_ends);
-			is_qtl_dict.setValue(id, is_qtl);
-			mutation_rate_dict.setValue(id, mutation_rates);
-			initializeRecombinationRate(rr*1e-8);
+			// Recombination: the linkage group's own rate within it, then 0.5 between its last base and the
+			// next group's first base (the rate at position x applies between x and x + 1)
+			last = offset + length - 1;
+			if(i < n_lg - 1){
+				if(length > 1){
+					rec_ends = c(rec_ends, last - 1);
+					rec_rates = c(rec_rates, rr*1e-8);
+				}
+				rec_ends = c(rec_ends, last);
+				rec_rates = c(rec_rates, 0.5);
+			}
+			else{
+				rec_ends = c(rec_ends, last);
+				rec_rates = c(rec_rates, rr*1e-8);
+			}
 		}
+		initializeMutationRate(mutation_rates*QTL_PROP_REGION, ends = region_ends);
+		initializeRecombinationRate(rec_rates, ends = rec_ends);
+		region_ends_dict.setValue(1, region_ends);
+		is_qtl_dict.setValue(1, is_qtl);
+		mutation_rate_dict.setValue(1, mutation_rates);
 		m2.convertToSubstitution = T;
 		m4.convertToSubstitution = T;
 		defineConstant('GENOMIC_REGION_ENDS', region_ends_dict);
