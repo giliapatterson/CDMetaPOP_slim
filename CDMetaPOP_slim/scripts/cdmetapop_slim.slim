@@ -1962,7 +1962,9 @@ function (float) additiveContributionsByOrigin(object<Subpopulation>$ focal_subp
 		unique_muts = unique(muts, preserveOrder = F);
 		n_muts = length(unique_muts);
 		// Individual (index in focal_subpop) carrying each copy
-		owners = repEach(haps.individual.index, haps.countOfMutationsOfType(mutType));
+		// (counted per individual: haps.countOfMutationsOfType() on many haplosomes at once intermittently
+		// crashes SLiM 5.1 or returns counts that don't match haps.mutationsOfType())
+		owners = repEach(seqLen(n_inds), sapply(inds, "size(applyValue.haplosomes.mutationsOfType(mutType));"));
 		copies = matrix(asFloat(tabulate(owners*n_muts + match(muts, unique_muts), n_inds*n_muts - 1)), nrow = n_muts);
 		origins = unique_muts.subpopID;
 		known = which(origins >= 0 & origins < n_origins);
