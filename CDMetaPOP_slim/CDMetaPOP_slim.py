@@ -3,7 +3,7 @@ import datetime,time,os,sys
 import numpy as np
 import subprocess
 import polars as pl
-from multiprocessing import Pool, Process, Queue, Lock
+from multiprocessing import Pool
 import multiprocessing as mp
 
 
@@ -114,79 +114,54 @@ rep_df = rep_df.with_columns(param_folder=f"{slim_params}run" + pl.col('run').ca
 rep_df = rep_df.with_columns(runvars = pl.col('param_folder') + "/RunVars_slim.csv")
 rep_df.write_csv(f"{outdir}simulation_info.csv")
 
-# Run all simulation replicates for a dataframe
-def run_slim(run_df, sim_info_q):
-    finished = 0
-    already_run = 0
-    failed = 0
-    for row in run_df.iter_rows(named = True):
-        rep_start = time.perf_counter()
-        rep_output_folder = f"{outdir}run{row['run']-1}batch0mc{row['rep']}species0/"
-        simulation_finished = f"{outdir}run{row['run']-1}batch0mc{row['rep']}species0/finished_{row['seed']}.txt"
-        if os.path.exists(simulation_finished) and not args.rerun:
-            already_run += 1
-            print(f"Run {row['run']} rep {row['rep']} with seed {row['seed']} already finished, skipping. Results: {rep_output_folder}")
-        else:
-            if not os.path.exists(rep_output_folder):
-                os.mkdir(rep_output_folder)
-            command = f"slim -d SEED={row['seed']} \
-                -d 'RUNVARS_FILE=\"{row['runvars']}\"' \
-                -d 'PARAM_FOLDER=\"./\"'\
-                -d 'IND_OUT_FOLDER=\"{rep_output_folder}\"'\
-                -d 'ALLPOPS_OUT=\"{rep_output_folder + "summary_popAllTime.csv"}\"'\
-                -d 'BYCLASS=\"{rep_output_folder + "summary_classAllTime.csv"}\"' \
-                -d 'QTL_OUT=\"{rep_output_folder + "QTL_overall.csv"}\"'\
-                -d 'QTL_SUBPOPS_OUT=\"{rep_output_folder + "QTL_subpops.csv"}\"'\
-                -d 'MUTATION_OUTPUT_FILE=\"{rep_output_folder + "mutation_origins.csv"}\"'\
-                -d 'MUTATION_EFFECTS_OUTPUT_FILE=\"{rep_output_folder + "mutation_effects.csv"}\"'\
-                -d 'TREESEQ = \"{str(args.treeseq).lower()}\"' \
-                -d 'TREESEQ_FILE =\"{rep_output_folder + "trees"}\"'\
-                -d 'FINISHED=\"{simulation_finished}\"' {script_dir}/scripts/cdmetapop_slim.slim"
-            stdout_file = f"{rep_output_folder}log.txt"
-            with open(stdout_file, 'w') as f:
-                output = subprocess.run(command, shell=True, stdout = f, stderr=subprocess.STDOUT)
-            if output.returncode != 0:
-                failed += 1
-                print(f"Run {row['run']} rep {row['rep']} failed in {time.perf_counter() - rep_start:.2g} seconds\nLog: {stdout_file}\nCommand: {command}")
-            else:
-                finished += 1
-                print(f"Run {row['run']} rep {row['rep']} finished in {time.perf_counter() - rep_start:.2g} seconds. Results: {rep_output_folder}")
-    #print(f"{len(run_df)} reps complete in {time.perf_counter() - run_start:.2g} seconds.\nReps: Failed {failed}/{len(run_df)} | Already run {already_run}/{len(run_df)} | Finished {finished}/{len(run_df)}\n")
-    sim_info = {'finished': finished, 'failed': failed, 'already_run': already_run}
-    sim_info_q.put(sim_info)
-    return(finished, failed, already_run)
+# Run one simulation replicate. Returns 'finished', 'failed' or 'already_run'.
+def run_slim(row):
+    rep_start = time.perf_counter()
+    rep_output_folder = f"{outdir}run{row['run']-1}batch0mc{row['rep']}species0/"
+    simulation_finished = f"{outdir}run{row['run']-1}batch0mc{row['rep']}species0/finished_{row['seed']}.txt"
+    if os.path.exists(simulation_finished) and not args.rerun:
+        print(f"Run {row['run']} rep {row['rep']} with seed {row['seed']} already finished, skipping. Results: {rep_output_folder}", flush = True)
+        return 'already_run'
+    if not os.path.exists(rep_output_folder):
+        os.mkdir(rep_output_folder)
+    command = f"slim -d SEED={row['seed']} \
+        -d 'RUNVARS_FILE=\"{row['runvars']}\"' \
+        -d 'PARAM_FOLDER=\"./\"'\
+        -d 'IND_OUT_FOLDER=\"{rep_output_folder}\"'\
+        -d 'ALLPOPS_OUT=\"{rep_output_folder + "summary_popAllTime.csv"}\"'\
+        -d 'BYCLASS=\"{rep_output_folder + "summary_classAllTime.csv"}\"' \
+        -d 'QTL_OUT=\"{rep_output_folder + "QTL_overall.csv"}\"'\
+        -d 'QTL_SUBPOPS_OUT=\"{rep_output_folder + "QTL_subpops.csv"}\"'\
+        -d 'MUTATION_OUTPUT_FILE=\"{rep_output_folder + "mutation_origins.csv"}\"'\
+        -d 'MUTATION_EFFECTS_OUTPUT_FILE=\"{rep_output_folder + "mutation_effects.csv"}\"'\
+        -d 'TREESEQ = \"{str(args.treeseq).lower()}\"' \
+        -d 'TREESEQ_FILE =\"{rep_output_folder + "trees"}\"'\
+        -d 'FINISHED=\"{simulation_finished}\"' {script_dir}/scripts/cdmetapop_slim.slim"
+    stdout_file = f"{rep_output_folder}log.txt"
+    with open(stdout_file, 'w') as f:
+        output = subprocess.run(command, shell=True, stdout = f, stderr=subprocess.STDOUT)
+    if output.returncode != 0:
+        print(f"Run {row['run']} rep {row['rep']} failed in {time.perf_counter() - rep_start:.2g} seconds\nLog: {stdout_file}\nCommand: {command}", flush = True)
+        return 'failed'
+    print(f"Run {row['run']} rep {row['rep']} finished in {time.perf_counter() - rep_start:.2g} seconds. Results: {rep_output_folder}", flush = True)
+    return 'finished'
 
 # Determine number of cores to use
 # This is the minimum of args.cores, number of replicates to run, and number of cores available
 cores_available = mp.cpu_count()
 cores = min(args.cores, cores_available, nreps)
-print(f"Using {cores} cores out of {cores_available} available.")
+print(f"Using {cores} cores out of {cores_available} available.", flush = True)
 
-
-# Chop dataframe into batches and run each batch
+# Run the replicates on a pool of worker processes. Each worker takes the next replicate as soon as it finishes
+# one, so all cores stay busy even when some replicates are much faster than others (e.g. when populations go
+# extinct). Replicates are started in rep_df order; seeds were assigned above, so they don't depend on the order.
 start_time = time.perf_counter()
-runs = []
-breakpoints = np.linspace(0, rep_df.shape[0], cores + 1).astype(int)
 if __name__ == '__main__':
     mp.set_start_method('fork')
-    sim_info_queue = Queue()
-    for start, end in zip(breakpoints[:-1], breakpoints[1:]):
-        subset_df = rep_df[start:end]
-        runs.append(Process(target=run_slim, args=(subset_df,sim_info_queue,)))
-    # Now Start Processes
-    for i in range(len(runs)):
-        runs[i].start()
-    # Now Join Processes
-    for i in range(len(runs)):
-        runs[i].join()
-    finished = 0
-    failed = 0
-    already_run = 0
-    while not sim_info_queue.empty():
-        info = sim_info_queue.get()
-        finished += info['finished']
-        failed += info['failed']
-        already_run += info['already_run']
-    sim_info_queue.close()
+    with Pool(processes = cores) as pool:
+        results = list(pool.imap_unordered(run_slim, rep_df.iter_rows(named = True), chunksize = 1))
+    finished = results.count('finished')
+    failed = results.count('failed')
+    already_run = results.count('already_run')
     print(f"{len(rep_df)} reps complete in {time.perf_counter() - start_time:.2g} seconds.\nReps: Failed {failed}/{len(rep_df)} | Already run {already_run}/{len(rep_df)} | Finished {finished}/{len(rep_df)}")
     print("---------------------------------------------------")
