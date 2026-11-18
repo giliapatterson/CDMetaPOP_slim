@@ -1111,35 +1111,21 @@ MUTATION_OUTPUT_TICKS late(){
 
 late() {
 	if(QTL & !QTL_TPC){
-		ne_subpops = sim.subpopulations[sim.subpopulations.individualCount > 0];
-		print("Phenotypes: ");
-		print(sapply(ne_subpops, "mean(applyValue.individuals.getValue('phenotype'));"));
-		print("Additive genetic contribution: ");
-		print(sapply(ne_subpops, "mean(applyValue.individuals.sumOfMutationsOfType(m2)) + QTL_BASELINE;"));
-		print("Temperatures: ");
-		print(GrowthTemperatureBack[ne_subpops.id]);
-		//print(sapply(ne_subpops, "var(applyValue.individuals.getValue('phenotype'));"));
-		print("Mutations: ");
-		print(sapply(ne_subpops, "length(unique(applyValue.haplosomes.mutationsOfType(m2)));"));
-		defineGlobal("EFFECTS", c(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2).selectionCoeff, sim.substitutionsOfType(m2).selectionCoeff));
-		updatePlotQTL();
+		// Effects of every mutation copy, only for the plots in SLiMgui (slow late in a run, when there are
+		// over a million copies)
+		if(exists("slimgui")){
+			defineGlobal("EFFECTS", c(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2).selectionCoeff, sim.substitutionsOfType(m2).selectionCoeff));
+			updatePlotQTL();
+		}
 	}
 	if(QTL & QTL_TPC){
-		ne_subpops = sim.subpopulations[sim.subpopulations.individualCount > 0];
-		print("Topts: ");
-		print(sapply(ne_subpops, "mean(applyValue.individuals.getValue('Topt'));"));
-		print("Additive genetic contribution: ");
-		print(sapply(ne_subpops, "mean(applyValue.individuals.sumOfMutationsOfType(m2)) + TOPT_BASELINE;"));
-		print("Temperatures: ");
-		print(GrowthTemperatureBack[ne_subpops.id]);
-		//print(sapply(ne_subpops, "var(applyValue.individuals.getValue('phenotype'));"));
-		print("Mutations: ");
-	 	print(sapply(ne_subpops, "length(unique(applyValue.haplosomes.mutationsOfType(m2)));"));
-		print("Epsilons: ");
-		print(sapply(ne_subpops, "mean(applyValue.individuals.getValue('epsilon'));"));
-		defineGlobal("TOPT_EFFECTS", c(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2).selectionCoeff, sim.substitutionsOfType(m2).selectionCoeff));
-		defineGlobal("EPSILON_EFFECTS", c(sim.subpopulations.individuals.haplosomes.mutationsOfType(m4).selectionCoeff, sim.substitutionsOfType(m4).selectionCoeff));
-		updatePlotTPC();
+		// Effects of every mutation copy, only for the plots in SLiMgui (slow late in a run, when there are
+		// over a million copies)
+		if(exists("slimgui")){
+			defineGlobal("TOPT_EFFECTS", c(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2).selectionCoeff, sim.substitutionsOfType(m2).selectionCoeff));
+			defineGlobal("EPSILON_EFFECTS", c(sim.subpopulations.individuals.haplosomes.mutationsOfType(m4).selectionCoeff, sim.substitutionsOfType(m4).selectionCoeff));
+			updatePlotTPC();
+		}
 	}
 	if(sum(sim.subpopulations.individualCount) == 0){
 		if(TREESEQ == 'true') sim.treeSeqOutput(TREESEQ_FILE, overwriteDirectory=T);
@@ -1815,11 +1801,24 @@ function (*) mean_or_NA(numeric x){
 function (float$) meanPi(object<Subpopulation> subpops, object<MutationType> mut_types){
 	chromosomes = sim.chromosomesOfType("A");
 	n = 2*sum(subpops.individualCount);
-	muts = sim.mutations;
-	muts = muts[(match(muts.mutationType.id, mut_types.id) >= 0) & (muts.chromosome.type == "A")];
+	// sim.mutationsOfType() is much faster than filtering all of sim.mutations by type
+	muts = NULL;
+	for(mut_type in mut_types) muts = c(muts, sim.mutationsOfType(mut_type));
+	if(size(muts) == 0) return 0.0;
+	muts = muts[muts.chromosome.type == "A"];
 	if(size(muts) == 0) return 0.0;
 	k = sim.mutationCounts(subpops, muts);
 	return sum(k*(n - k) / (n*(n - 1)/2) / muts.chromosome.length) / length(chromosomes);
+}
+
+// Number of mutations of mut_type carried by at least one living individual. Gives the same result as
+// length(unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(mut_type))) without collecting
+// every copy of every mutation (over a million late in a run). Passing sim.subpopulations (not NULL) makes
+// SLiM count the current individuals rather than use a saved count from earlier in the tick.
+function (integer$) nSegregating(object<MutationType>$ mut_type){
+	muts = sim.mutationsOfType(mut_type);
+	if(size(muts) == 0) return 0;
+	return sum(sim.mutationCounts(sim.subpopulations, muts) > 0);
 }
 
 function (void) writeQTLOutputOverall(string outfile, logical header, logical qtl_tpc){
@@ -1838,7 +1837,7 @@ function (void) writeQTLOutputOverall(string outfile, logical header, logical qt
 		Ve = var(sim.subpopulations.individuals.getValue('phenotype') - sim.subpopulations.individuals.sumOfMutationsOfType(m2));
 		// Heritability is calculated from this tick's newborns, before selection (see early())
 		heritability = heritability_output(H2_OVERALL);
-		qtl_alleles = length(unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2)));
+		qtl_alleles = nSegregating(m2);
 		avg_effect_size = mean_or_NA(abs(c(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2).selectionCoeff, sim.substitutionsOfType(m2).selectionCoeff)));
 		neutral_pi = meanPi(sim.subpopulations, m3);
 		overall_pi = meanPi(sim.subpopulations, c(m3, m2));
@@ -1850,13 +1849,13 @@ function (void) writeQTLOutputOverall(string outfile, logical header, logical qt
 		Topt_Ve = var(sim.subpopulations.individuals.getValue('Topt') - sim.subpopulations.individuals.sumOfMutationsOfType(m2));
 		// Heritability is calculated from this tick's newborns, before selection (see early())
 		Topt_heritability = heritability_output(H2_TOPT_OVERALL);
-		Topt_alleles = length(unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2)));
+		Topt_alleles = nSegregating(m2);
 		Topt_avg_effect_size = mean_or_NA(abs(c(sim.subpopulations.individuals.haplosomes.mutationsOfType(m2).selectionCoeff, sim.substitutionsOfType(m2).selectionCoeff)));
 		epsilon_variance = var(sim.subpopulations.individuals.getValue('epsilon'));
 		epsilon_Va = calcVA(sim.subpopulations.individuals, m4);
 		epsilon_Ve = var(sim.subpopulations.individuals.getValue('epsilon') - sim.subpopulations.individuals.sumOfMutationsOfType(m4));
 		epsilon_heritability = heritability_output(H2_EPSILON_OVERALL);
-		epsilon_alleles = length(unique(sim.subpopulations.individuals.haplosomes.mutationsOfType(m4)));
+		epsilon_alleles = nSegregating(m4);
 		epsilon_avg_effect_size = mean_or_NA(abs(c(sim.subpopulations.individuals.haplosomes.mutationsOfType(m4).selectionCoeff, sim.substitutionsOfType(m4).selectionCoeff)));
 		neutral_pi = meanPi(sim.subpopulations, m3);
 		overall_pi = meanPi(sim.subpopulations, c(m3, m2, m4));
@@ -1895,6 +1894,9 @@ function (void) writeQTLOutputSubpops(string outfile, logical header, logical qt
 		return;
 	}
 	year = community.tick;
+	// Per-patch pi is slow (it grows with the number of mutation copies), so it is only calculated in the
+	// individual output years (OUTPUT_TICKS) and is NA in other years
+	pi_year = any(OUTPUT_TICKS == year);
 	for(subpop in sim.subpopulations){
 		PatchID = subpop.id;
 		K = PATCHKS[PatchID];
@@ -1910,8 +1912,14 @@ function (void) writeQTLOutputSubpops(string outfile, logical header, logical qt
 			heritability = heritability_output(H2_SUBPOPS[PatchID]);
 			qtl_alleles = length(unique(subpop.individuals.haplosomes.mutationsOfType(m2)));
 			avg_effect_size = mean_or_NA(abs(c(subpop.individuals.haplosomes.mutationsOfType(m2).selectionCoeff, sim.substitutionsOfType(m2).selectionCoeff)));
-			neutral_pi = meanPi(subpop, m3);
-			overall_pi = meanPi(subpop, c(m3, m2));
+			if(pi_year){
+				neutral_pi = meanPi(subpop, m3);
+				overall_pi = meanPi(subpop, c(m3, m2));
+			}
+			else{
+				neutral_pi = 'NA';
+				overall_pi = 'NA';
+			}
 		}
 		if(popsize > 1 & qtl_tpc){
 			avg_Topt = mean(subpop.individuals.getValue('Topt'));
@@ -1929,8 +1937,14 @@ function (void) writeQTLOutputSubpops(string outfile, logical header, logical qt
 			epsilon_heritability = heritability_output(H2_EPSILON_SUBPOPS[PatchID]);
 			epsilon_alleles = length(unique(subpop.individuals.haplosomes.mutationsOfType(m4)));
 			epsilon_avg_effect_size = mean_or_NA(abs(c(subpop.individuals.haplosomes.mutationsOfType(m4).selectionCoeff, sim.substitutionsOfType(m4).selectionCoeff)));
-			neutral_pi = meanPi(subpop, m3);
-			overall_pi = meanPi(subpop, c(m3, m2, m4));
+			if(pi_year){
+				neutral_pi = meanPi(subpop, m3);
+				overall_pi = meanPi(subpop, c(m3, m2, m4));
+			}
+			else{
+				neutral_pi = 'NA';
+				overall_pi = 'NA';
+			}
 		}
 		if(popsize <= 1){
 			avg_phenotype = 'NA';
